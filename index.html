@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Duel of Champions</title>
+<style>
+*{box-sizing:border-box}
+:root{--gold:#c9a45a;--gold-l:#f3d58a;--sh:clamp(78px,calc((100vh - 318px) / 4),150px);--sw:calc(var(--sh) * .9)}
+body{margin:0;background:#0a0908;color:#eee;font-family:Georgia,"Times New Roman",serif;min-height:100vh;user-select:none;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--gold);background:linear-gradient(#5a4128,#2a1c0c);color:#f5e6c8;padding:5px 10px;font-size:13px}
+button:hover:not(:disabled){filter:brightness(1.3)}
+button:disabled{opacity:.4;cursor:default}
+.game{display:grid;grid-template-rows:78px 1fr 206px;height:100vh;min-width:1180px}
+
+/* ---------- Barre supérieure ---------- */
+.topbar{display:flex;align-items:center;justify-content:center;gap:0;background:linear-gradient(#3a3228,#17120c);border-bottom:3px solid var(--gold);box-shadow:0 4px 18px #000;position:relative;z-index:4}
+.tb-side{display:flex;align-items:center;gap:14px;width:470px;height:62px;padding:0 14px;background:linear-gradient(#2a241c,#110d09);border:2px solid #7a6238;border-radius:8px}
+.tb-side.p0{border-radius:30px 8px 8px 30px;justify-content:flex-start}
+.tb-side.p1{border-radius:8px 30px 30px 8px;flex-direction:row-reverse}
+.tb-side.active{border-color:var(--gold-l);box-shadow:0 0 14px #f3d58a55 inset}
+.banner{width:44px;height:66px;margin-top:10px;clip-path:polygon(0 0,100% 0,100% 100%,50% 84%,0 100%);display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-size:22px;border-top:3px solid var(--gold)}
+.banner.havre{background:linear-gradient(#3c6fc0,#173263)}
+.banner.necropole{background:linear-gradient(#3d8a45,#11361a)}
+.banner.inferno{background:linear-gradient(#d0452a,#5c140a)}
+.pinfo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.tb-side.p1 .pinfo{align-items:flex-end}
+.pname{font-weight:bold;color:var(--gold-l);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px;background:#0008;padding:1px 10px;border-radius:4px;border:1px solid #5a4a30}
+.psub{font-size:11px;color:#b9a582}
+.statrow{display:flex;gap:8px;align-items:center}
+.sb{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-weight:bold;font-size:15px;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;position:relative}
+.sb.m{background:linear-gradient(#8fa3bf,#3f5270);border-radius:6px 6px 50% 50%;border:2px solid #cfdcef}
+.sb.g{background:radial-gradient(circle at 35% 30%,#bfe6ff,#2d86d6 45%,#0c3a78);border-radius:50%;border:2px solid #9fd0ff}
+.sb.d{background:linear-gradient(#9a6ad8,#4a2a86);border-radius:4px 4px 12px 12px;border:2px solid #cdb2f2}
+.sb.dev{cursor:pointer;animation:glow 1s infinite;box-shadow:0 0 12px #ffe27a}
+@keyframes glow{50%{box-shadow:0 0 3px #ffe27a}}
+.sb .plus{position:absolute;top:-8px;right:-8px;font-size:11px;background:#2a6a2a;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;border:1px solid #8f8}
+.drawbtn{padding:3px 7px;font-size:11px}
+.resc{width:54px;height:54px;border-radius:50%;background:radial-gradient(#2b2621,#0c0a08);border:3px solid var(--gold);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none}
+.resc b{font-size:24px;color:#fff}.resc small{font-size:12px;color:#6cc8ff;font-weight:bold}
+.endturn{width:104px;height:104px;margin:14px -8px -40px;border-radius:50%;border:5px solid var(--gold);background:radial-gradient(circle at 50% 40%,#ffb347,#e2541c 45%,#7a1a06);color:#fff3d0;font-size:15px;font-weight:bold;text-transform:uppercase;text-shadow:0 1px 3px #000;box-shadow:0 0 0 3px #3a2a12,0 6px 18px #000,0 0 22px #ff7a2a88;z-index:5;line-height:1.1;padding:0}
+.endturn:disabled{opacity:1;background:radial-gradient(circle at 50% 40%,#7a7060,#3a3228 50%,#1a150f);color:#bba;box-shadow:0 0 0 3px #3a2a12,0 6px 18px #000}
+.menubtn{position:absolute;left:8px;top:8px;font-size:16px;padding:2px 8px}
+.endturn small{display:block;font-size:10px;font-weight:normal;text-transform:none;margin-top:3px;opacity:.85}
+
+/* ---------- Champ de bataille ---------- */
+.field{position:relative;display:flex;align-items:center;justify-content:center;gap:26px;overflow:visible;padding:14px 10px 6px}
+.half{position:absolute;top:0;bottom:0;width:55%;background-size:cover;background-position:center 30%;opacity:.9;pointer-events:none}
+.half.l{left:0;-webkit-mask-image:linear-gradient(90deg,#000 55%,transparent);mask-image:linear-gradient(90deg,#000 55%,transparent)}
+.half.r{right:0;-webkit-mask-image:linear-gradient(270deg,#000 55%,transparent);mask-image:linear-gradient(270deg,#000 55%,transparent)}
+.field::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 40%,#000a);pointer-events:none}
+.grid{display:grid;grid-template-columns:repeat(2,var(--sw)) 48px repeat(2,var(--sw));grid-auto-rows:var(--sh);gap:8px 10px;position:relative;z-index:1}
+.slot{position:relative;border:2px solid #d8ccb030;border-radius:4px;background:#0000004d;cursor:pointer}
+.slot::before{content:"";position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #d8ccb030;background:#ffffff06}
+.slot.target{border-color:#7f7;box-shadow:0 0 14px #5f5 inset,0 0 8px #5f5}
+.slot.target::before{border-color:#7f7}
+.lane{display:flex;align-items:center;justify-content:center}
+.lane::before{content:"";width:34px;height:34px;border-radius:50%;border:2px solid #d8ccb028;box-shadow:0 0 0 5px #0003 inset}
+.lane.hot::before{border-color:#ffb050;box-shadow:0 0 12px #ffb050}
+
+.unit{position:absolute;inset:3px;border-radius:4px;background:#241a0e center 20%/cover no-repeat;border:2px solid #999;transition:transform .22s,box-shadow .22s;box-shadow:0 3px 8px #000c;display:flex;align-items:center;justify-content:center}
+.unit.p0{border-color:#86c26a}.unit.p1{border-color:#d8503a}
+.unit .emoji{font-size:34px}
+.unit.target{box-shadow:0 0 18px #f44;border-color:#ff5050;animation:pulse 1s infinite}
+.unit.sel{box-shadow:0 0 18px #ff0;border-color:#ff0}
+.unit.attacking.p0{transform:translateX(22px) scale(1.12);z-index:5;box-shadow:0 0 22px #fa0}
+.unit.attacking.p1{transform:translateX(-22px) scale(1.12);z-index:5;box-shadow:0 0 22px #fa0}
+.unit.moved{filter:saturate(.55) brightness(.85)}
+@keyframes pulse{50%{box-shadow:0 0 4px #f44}}
+.ust{position:absolute;left:3px;bottom:3px;display:flex;flex-direction:column;gap:2px}
+.b{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;color:#fff;text-shadow:0 0 3px #000;border:2px solid #ddd;background:#1a1a1a}
+.b.atk{background:radial-gradient(#6a5a48,#1c140c);border-color:#e8d2a8}
+.b.ret{background:radial-gradient(#4a5868,#141a22);border-color:#a8c4dc;width:18px;height:18px;font-size:11px;margin-left:1px}
+.b.hp{background:radial-gradient(#e24a3a,#6a0e08);border-color:#ffb0a0;width:24px;height:24px;font-size:13px;margin-left:-1px}
+.b.hp.dmg{color:#ffe070}
+.utag{position:absolute;top:2px;right:2px;font-size:12px;background:#000a;border-radius:4px;padding:0 2px;line-height:16px}
+.ukw{position:absolute;top:2px;left:2px;font-size:11px;background:#000a;border-radius:4px;padding:0 2px;line-height:16px}
+.flash{position:absolute;top:28%;left:50%;font-size:28px;font-weight:bold;color:#ff3b3b;text-shadow:0 0 5px #000,0 0 2px #000;animation:float .9s forwards;pointer-events:none;z-index:10}
+.flash.heal{color:#5f5}
+@keyframes float{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-34px)}}
+
+/* ---------- Colonnes des héros ---------- */
+.herocol{display:flex;flex-direction:column;align-items:center;gap:8px;width:170px;position:relative;z-index:1}
+.herocard{width:150px;height:180px;border-radius:6px;border:3px solid #8a6a3a;background:#241a0e center 15%/cover no-repeat;position:relative;cursor:pointer;box-shadow:0 6px 16px #000;display:flex;align-items:center;justify-content:center;font-size:60px}
+.herocard.p0{outline:2px solid #86c26a55}.herocard.p1{outline:2px solid #d8503a55}
+.herocard.active{border-color:var(--gold-l);box-shadow:0 0 22px #f3d58a88,0 6px 16px #000}
+.herocard.target{border-color:#ff4040;animation:pulse 1s infinite;box-shadow:0 0 22px #f44}
+.herohp{position:absolute;left:-10px;bottom:-10px;width:44px;height:44px;border-radius:50%;background:radial-gradient(#e24a3a,#6a0e08);border:3px solid #ffcfa0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;color:#fff;text-shadow:0 0 3px #000}
+.power{width:160px;font-size:12px;padding:4px 6px;line-height:1.15}
+.power.ready{border-color:#ffe27a;box-shadow:0 0 10px #ffe27a88}
+.piles{display:flex;gap:10px}
+.pile{width:62px;height:82px;border-radius:5px;position:relative;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;color:#fff;text-shadow:0 0 4px #000}
+.pile.deck{background:radial-gradient(circle at 50% 45%,#ffb347,#c8401a 50%,#5a1006);border:2px solid var(--gold);box-shadow:3px 3px 0 #3a1a08,6px 6px 0 #26110a,0 6px 12px #000}
+.pile.deck::before{content:"⚔";position:absolute;top:6px;font-size:16px;color:#fff3d0aa}
+.pile.grave{background:#0006 center 20%/cover no-repeat;border:2px solid #6a6258;filter:grayscale(.8) brightness(.8)}
+.pile small{position:absolute;bottom:2px;font-size:10px;color:#ddd}
+.pile .cnt{background:#000a;border-radius:10px;padding:0 6px;font-size:14px}
+
+/* ---------- Bas d'écran ---------- */
+.bottom{display:flex;gap:12px;padding:0 12px 10px;align-items:flex-end;position:relative;z-index:3}
+.hand{flex:1;display:flex;align-items:flex-end;padding:0 0 4px 40px;min-width:0;height:100%}
+.card{width:112px;height:160px;flex:none;border-radius:7px;border:3px solid #6b5230;background:#1f160c;position:relative;margin-left:-18px;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:-4px 0 10px #000a;overflow:hidden}
+.card:first-child{margin-left:0}
+.card .cart{position:absolute;inset:0 0 34px 0;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
+.card .cbar{position:absolute;left:0;right:0;bottom:0;height:34px;background:linear-gradient(#3a2c1a,#15100a);border-top:2px solid #8a6a3a;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.card.spell{border-color:#4a6ab0}.card.spell .cbar{background:linear-gradient(#22305a,#0d1328);border-top-color:#6a8ad0}
+.card.fortune{border-color:#6a4aa0}.card.fortune .cbar{background:linear-gradient(#3a2256,#170c24);border-top-color:#9a7ad0}
+.cname{font-size:11px;font-weight:bold;color:#f5e6c8;text-align:center;line-height:1.05}
+.cost{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#bfe6ff,#2d86d6 45%,#0c3a78);border:2px solid #d6eeff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;color:#fff;text-shadow:0 0 3px #000;z-index:1}
+.creqs{position:absolute;top:3px;right:3px;display:flex;flex-direction:column;gap:2px;z-index:1}
+.creqs .sb{width:22px;height:22px;font-size:12px}
+.creqs .sb.miss{filter:grayscale(1) brightness(.7);outline:2px solid #f44;outline-offset:-1px}
+.card .ust{bottom:38px}
+.card:hover{transform:translateY(-22px) scale(1.06);z-index:10}
+.card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
+.card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-28px) scale(1.06);z-index:11}
+.info{width:370px;height:190px;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;flex:none;box-shadow:0 0 18px #000}
+.ihead{background:linear-gradient(#4a3a22,#241a0c);border-bottom:1px solid var(--gold);padding:5px 8px;font-size:12px;color:var(--gold-l);text-align:center;min-height:30px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+.ihead button{padding:2px 7px;font-size:11px}
+.ibody{flex:1;display:flex;gap:8px;padding:7px;min-height:0}
+.iart{width:92px;flex:none;border-radius:4px;border:2px solid #6b5230;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
+.itext{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;overflow:hidden}
+.iname{font-weight:bold;color:#f5e6c8;font-size:14px}
+.itype{color:#c9b18a;font-size:11px}
+.ireqs{display:flex;gap:4px;align-items:center}
+.ireqs .sb{width:22px;height:22px;font-size:12px}
+.idesc{color:#e8dcc0;line-height:1.25;overflow-y:auto}
+.istats{margin-top:auto;font-weight:bold;font-size:13px;display:flex;gap:10px}
+.atk{color:#ffcf80}.ret{color:#8fd0ff}.hpv{color:#ff7070}
+.ihint{color:#9c8c70;font-style:italic;font-size:12px;margin:auto;text-align:center}
+.log{width:300px;height:190px;overflow-y:auto;background:#000a;border:1px solid #5a4a30;border-radius:6px;padding:6px 8px;font-size:12px;flex:none}
+.log div{padding:1px 0}
+.log .turn{color:#f0c040;font-weight:bold;margin-top:3px}
+.log .dmg{color:#ff9a9a}
+.log .p0{color:#b8e0a0}.log .p1{color:#ffaaaa}
+
+/* ---------- Menu & fin de partie ---------- */
+.overlay{position:fixed;inset:0;background:#000000cc;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:50}
+.overlay h1{font-size:56px;color:#f0c040;margin:0}
+.menu{max-width:1060px;margin:0 auto;padding:24px;text-align:center;height:100vh;overflow-y:auto}
+.menu h1{font-size:46px;color:#f0c040;margin:6px 0;text-shadow:0 0 18px #e2541c}
+.facs{display:flex;gap:18px;justify-content:center;margin:20px 0;flex-wrap:wrap}
+.fac{width:300px;height:360px;border:3px solid #6b5230;border-radius:10px;background:#1a120a center 15%/cover no-repeat;cursor:pointer;position:relative;overflow:hidden;transition:transform .15s;box-shadow:0 8px 20px #000}
+.fac:hover{border-color:var(--gold-l);transform:translateY(-6px)}
+.fac .ftxt{position:absolute;left:0;right:0;bottom:0;padding:12px;background:linear-gradient(transparent,#000e 30%);text-align:left;font-size:13px}
+.fac h2{margin:0 0 4px;color:var(--gold-l)}
+.rules{text-align:left;background:#00000077;padding:14px 22px;border-radius:10px;font-size:14px;line-height:1.5;border:1px solid #4a3a26}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ====================================================================
+//  Constantes & utilitaires
+// ====================================================================
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+const STAT = { m: { icon: '⚔️', name: 'Puissance' }, g: { icon: '✦', name: 'Magie' }, d: { icon: '☘', name: 'Destinée' } };
+const AT = { melee: { icon: '🗡️', name: 'Mêlée' }, shooter: { icon: '🏹', name: 'Tireur' }, magic: { icon: '🔮', name: 'Magique' } };
+const MAX_HAND = 10, MAX_RES = 10, HERO_HP = 20;
+
+// ====================================================================
+//  Cartes
+// ====================================================================
+const CARDS = {
+  // ----------------------------- HAVRE -----------------------------
+  ecuyer:      { name: 'Écuyer', type: 'creature', cost: 1, req: { m: 1 }, atk: 1, ret: 1, hp: 3, at: 'melee', icon: '🛡️' },
+  arbaletrier: { name: 'Arbalétrier', type: 'creature', cost: 2, req: { m: 1 }, atk: 2, ret: 0, hp: 2, at: 'shooter', icon: '🏹' },
+  sentinelle:  { name: 'Sentinelle', type: 'creature', cost: 2, req: { m: 1 }, atk: 1, ret: 2, hp: 4, at: 'melee', icon: '⚔️' },
+  soeur:       { name: 'Sœur de Lumière', type: 'creature', cost: 3, req: { m: 1, g: 1 }, atk: 1, ret: 0, hp: 3, at: 'shooter', icon: '🕊️',
+                 text: 'Déploiement : soigne 2 PV à vos créatures et à votre héros.',
+                 onDeploy: (pi) => { units(pi).forEach(x => healUnit(x.u, 2)); healHero(pi, 2); } },
+  griffon:     { name: 'Griffon', type: 'creature', cost: 3, req: { m: 2 }, atk: 3, ret: 1, hp: 3, at: 'melee', icon: '🦅', kw: { noret: true } },
+  inquisiteur: { name: 'Inquisiteur', type: 'creature', cost: 4, req: { m: 2, g: 1 }, atk: 2, ret: 0, hp: 4, at: 'magic', icon: '📿' },
+  chevalier:   { name: 'Chevalier', type: 'creature', cost: 5, req: { m: 3 }, atk: 4, ret: 2, hp: 6, at: 'melee', icon: '🐎' },
+  seraphin:    { name: 'Séraphin', type: 'creature', cost: 7, req: { m: 4, g: 1 }, atk: 6, ret: 3, hp: 8, at: 'melee', icon: '👼', kw: { regen: 2 } },
+  soins:       { name: 'Soins', type: 'spell', school: 'Lumière', cost: 1, req: { g: 1 }, icon: '💧', tgt: 'allyAny', ai: 'heal', n: 4,
+                 text: 'Soigne 4 PV à une créature alliée ou à votre héros.', fx: (pi, t) => heal(t, 4) },
+  forceDivine: { name: 'Force divine', type: 'spell', school: 'Lumière', cost: 2, req: { g: 2 }, icon: '💪', tgt: 'allyUnit', ai: 'buff',
+                 text: 'Une créature alliée gagne +2 attaque et +2 PV.', fx: (pi, t) => buffUnit(U(t), 2, 2, 0) },
+  chatiment:   { name: 'Châtiment', type: 'spell', school: 'Lumière', cost: 3, req: { g: 2 }, icon: '⚡', tgt: 'enemyUnit', ai: 'dmg', n: 4,
+                 text: 'Inflige 4 dégâts à une créature ennemie.', fx: (pi, t) => dmg(t, 4) },
+  recrutement: { name: 'Recrutement', type: 'fortune', cost: 2, req: { d: 1 }, icon: '📜',
+                 text: 'Piochez 2 cartes.', fx: (pi) => draw(pi, 2), aiScore: (pi) => P(pi).hand.length < 7 ? 4 : 0 },
+  murBoucliers:{ name: 'Mur de boucliers', type: 'fortune', cost: 2, req: { d: 1 }, icon: '🧱',
+                 text: 'Vos créatures gagnent +1 riposte et +1 PV.',
+                 fx: (pi) => units(pi).forEach(x => buffUnit(x.u, 0, 1, 1)), aiScore: (pi) => units(pi).length * 1.5 - 1 },
+
+  // ---------------------------- NÉCROPOLE ----------------------------
+  squelette:   { name: 'Squelette', type: 'creature', cost: 1, req: { m: 1 }, atk: 1, ret: 1, hp: 2, at: 'melee', icon: '💀' },
+  archerSq:    { name: 'Archer squelette', type: 'creature', cost: 2, req: { m: 1 }, atk: 2, ret: 0, hp: 2, at: 'shooter', icon: '🦴' },
+  goule:       { name: 'Goule', type: 'creature', cost: 2, req: { m: 1 }, atk: 2, ret: 1, hp: 3, at: 'melee', icon: '🧟', kw: { regen: 1 } },
+  necromancien:{ name: 'Nécromancien', type: 'creature', cost: 3, req: { m: 1, g: 1 }, atk: 1, ret: 0, hp: 3, at: 'shooter', icon: '🧙',
+                 text: 'Déploiement : relève un Squelette dans un emplacement libre.', onDeploy: (pi) => summon(pi, 'squelette', 0) },
+  spectre:     { name: 'Spectre', type: 'creature', cost: 3, req: { m: 1, g: 1 }, atk: 2, ret: 0, hp: 4, at: 'melee', icon: '👻', kw: { noret: true } },
+  vampire:     { name: 'Vampire', type: 'creature', cost: 4, req: { m: 2 }, atk: 3, ret: 1, hp: 5, at: 'melee', icon: '🧛', kw: { vampire: true } },
+  liche:       { name: 'Liche', type: 'creature', cost: 5, req: { m: 1, g: 3 }, atk: 3, ret: 0, hp: 5, at: 'magic', icon: '☠️' },
+  dragonSp:    { name: 'Dragon spectral', type: 'creature', cost: 7, req: { m: 3, g: 2 }, atk: 6, ret: 2, hp: 9, at: 'melee', icon: '🐉', kw: { vampire: true } },
+  drainVie:    { name: 'Drain de vie', type: 'spell', school: 'Ténèbres', cost: 2, req: { g: 1 }, icon: '🩸', tgt: 'enemyUnit', ai: 'dmg', n: 3,
+                 text: 'Inflige 3 dégâts à une créature ennemie. Votre héros récupère 3 PV.', fx: (pi, t) => { dmg(t, 3); healHero(pi, 3); } },
+  faiblesse:   { name: 'Faiblesse', type: 'spell', school: 'Ténèbres', cost: 1, req: { g: 1 }, icon: '🥀', tgt: 'enemyUnit', ai: 'debuff', n: 2,
+                 text: 'Une créature ennemie perd 2 attaque.', fx: (pi, t) => { const u = U(t); u.atk = Math.max(0, u.atk - 2); } },
+  releverMorts:{ name: 'Relever les morts', type: 'spell', school: 'Ténèbres', cost: 3, req: { g: 2 }, icon: '🪦',
+                 text: 'Relève 2 Squelettes dans des emplacements libres.', can: (pi) => emptySlots(pi).length > 0,
+                 fx: (pi) => { summon(pi, 'squelette', 0); summon(pi, 'squelette', 0); }, aiScore: (pi) => Math.min(2, emptySlots(pi).length) * 2.5 },
+  pacteFuneste:{ name: 'Pacte funeste', type: 'fortune', cost: 1, req: { d: 1 }, icon: '📕',
+                 text: 'Votre héros perd 2 PV. Piochez 2 cartes.', fx: (pi) => { damageHero(pi, 2); draw(pi, 2); },
+                 aiScore: (pi) => P(pi).hp > 8 && P(pi).hand.length < 7 ? 4 : 0 },
+  malediction: { name: 'Malédiction', type: 'fortune', cost: 2, req: { d: 1 }, icon: '🕯️',
+                 text: 'Le héros ennemi perd 3 PV.', fx: (pi) => damageHero(1 - pi, 3), aiScore: (pi) => P(1 - pi).hp <= 3 ? 999 : 2.5 },
+
+  // ----------------------------- INFERNO -----------------------------
+  diablotin:   { name: 'Diablotin', type: 'creature', cost: 1, req: { m: 1 }, atk: 2, ret: 0, hp: 1, at: 'melee', icon: '😈' },
+  cerbere:     { name: 'Cerbère', type: 'creature', cost: 2, req: { m: 1 }, atk: 2, ret: 1, hp: 2, at: 'melee', icon: '🐕',
+                 text: 'Déploiement : inflige 1 dégât au héros ennemi.', onDeploy: (pi) => damageHero(1 - pi, 1) },
+  tourmenteur: { name: 'Tourmenteur', type: 'creature', cost: 2, req: { m: 1 }, atk: 1, ret: 0, hp: 3, at: 'shooter', icon: '⛓️' },
+  succube:     { name: 'Succube', type: 'creature', cost: 3, req: { m: 1 }, atk: 3, ret: 0, hp: 2, at: 'shooter', icon: '🦇' },
+  demonCornu:  { name: 'Démon cornu', type: 'creature', cost: 3, req: { m: 2 }, atk: 3, ret: 2, hp: 3, at: 'melee', icon: '👹' },
+  pyromancien: { name: 'Pyromancien', type: 'creature', cost: 4, req: { m: 1, g: 1 }, atk: 2, ret: 0, hp: 3, at: 'magic', icon: '🔥' },
+  diableFosses:{ name: 'Diable des fosses', type: 'creature', cost: 5, req: { m: 3 }, atk: 5, ret: 1, hp: 5, at: 'melee', icon: '🔱' },
+  archidiable: { name: 'Archidiable', type: 'creature', cost: 7, req: { m: 4 }, atk: 7, ret: 2, hp: 7, at: 'melee', icon: '👿',
+                 text: 'Déploiement : inflige 2 dégâts à toutes les créatures ennemies.',
+                 onDeploy: (pi) => units(1 - pi).forEach(x => damageUnit(x.u, 2)) },
+  traitFeu:    { name: 'Trait de feu', type: 'spell', school: 'Feu', cost: 1, req: { g: 1 }, icon: '☄️', tgt: 'enemyUnit', ai: 'dmg', n: 2,
+                 text: 'Inflige 2 dégâts à une créature ennemie.', fx: (pi, t) => dmg(t, 2) },
+  bouleFeu:    { name: 'Boule de feu', type: 'spell', school: 'Feu', cost: 3, req: { g: 2 }, icon: '💥', tgt: 'enemyAny', ai: 'dmg', n: 3,
+                 text: 'Inflige 3 dégâts à une créature ou au héros ennemi.', fx: (pi, t) => dmg(t, 3) },
+  pluieFeu:    { name: 'Pluie de feu', type: 'spell', school: 'Feu', cost: 5, req: { g: 3 }, icon: '🌋',
+                 text: 'Inflige 2 dégâts à toutes les créatures ennemies.', fx: (pi) => units(1 - pi).forEach(x => damageUnit(x.u, 2)),
+                 aiScore: (pi) => units(1 - pi).reduce((s, x) => s + (x.u.hpCur <= 2 ? unitValue(x.u) : 1), 0) - 3 },
+  frenesie:    { name: 'Frénésie', type: 'fortune', cost: 3, req: { d: 2 }, icon: '💢',
+                 text: 'Vos créatures gagnent +1 attaque.', fx: (pi) => units(pi).forEach(x => buffUnit(x.u, 1, 0, 0)),
+                 aiScore: (pi) => units(pi).length * 1.5 - 1 },
+  pacteDemo:   { name: 'Pacte démoniaque', type: 'fortune', cost: 0, req: { d: 1 }, icon: '🗡️', tgt: 'allyUnit', ai: 'sacrifice',
+                 text: 'Détruisez une de vos créatures. Piochez 2 cartes.', fx: (pi, t) => { kill(U(t)); draw(pi, 2); } },
+};
+// Illustrations (img/art/, générées par tools/make_art.py depuis les cartes Base set 1 du wiki)
+const ART = {
+  ecuyer: 'Elite_squire', arbaletrier: 'Imperial_crossbowman', sentinelle: 'Imperial_sentinel', soeur: 'Devoted_sister',
+  griffon: 'Loyal_griffin', inquisiteur: 'Vestal_card', chevalier: 'Sun_rider_card', seraphin: 'Warrior_seraph',
+  soins: 'Heal_card', forceDivine: 'Bless_card', chatiment: 'Word_of_Light_card', recrutement: 'Call_to_Duty', murBoucliers: 'Fortified_outpost',
+  squelette: 'Skeleton_spearman', archerSq: 'Plague_skeleton', goule: 'Wretched_ghoul', necromancien: 'Neophyte_lich',
+  spectre: 'Lingering_ghost', vampire: 'Vampire_knight', liche: 'Archlich_card', dragonSp: 'Ghost_dragon_card',
+  drainVie: 'Vampiric_embrace_card', faiblesse: 'Weakness_card', releverMorts: 'Mass_grave', pacteFuneste: 'Shantiri_ruins', malediction: 'Curse_of_the_Netherworld_card',
+  diablotin: 'Chaos_imp', cerbere: 'Cerberus_card', tourmenteur: 'Tormentor_card', succube: 'Succubus_card',
+  demonCornu: 'Lacerator_card', pyromancien: 'Chaos_sorceress', diableFosses: 'Pit_lord_card', archidiable: 'Abyssal_lord_card',
+  traitFeu: 'Fire_bolt_card', bouleFeu: 'Fireball_card', pluieFeu: 'Firestorm_card', frenesie: 'Frenzy_card', pacteDemo: 'Altar_of_Destruction_card',
+};
+for (const id in CARDS) { CARDS[id].id = id; CARDS[id].art = ART[id]; }
+
+// ====================================================================
+//  Factions & héros
+// ====================================================================
+const FACTIONS = {
+  havre: {
+    label: 'Havre', icon: '🦅', desc: 'Soldats disciplinés, soins et créatures robustes.',
+    hero: { name: 'Anton, duc du Griffon', icon: '🤴', art: 'Siegfried_Champion_of_Faith', m: 1, g: 1, d: 0,
+      power: { name: 'Bénédiction', cost: 2, tgt: 'allyAny', ai: 'heal', n: 3, text: 'Soigne 3 PV à une créature alliée ou à votre héros.', fx: (pi, t) => heal(t, 3) } },
+    deck: { ecuyer: 3, arbaletrier: 3, sentinelle: 3, soeur: 2, griffon: 3, inquisiteur: 2, chevalier: 2, seraphin: 2, soins: 2, forceDivine: 2, chatiment: 2, recrutement: 2, murBoucliers: 2 },
+  },
+  necropole: {
+    label: 'Nécropole', icon: '💀', desc: 'Morts-vivants qui se régénèrent, drainent la vie et reviennent en masse.',
+    hero: { name: 'Ornella la Nécromancienne', icon: '🧝‍♀️', art: 'Mother_Namtaru_Invoker_of_Death', m: 1, g: 1, d: 0,
+      power: { name: 'Nécromancie', cost: 3, text: 'Relève un Squelette dans un emplacement libre.', can: (pi) => emptySlots(pi).length > 0,
+               fx: (pi) => summon(pi, 'squelette', 0), aiScore: () => 3 } },
+    deck: { squelette: 3, archerSq: 3, goule: 3, necromancien: 2, spectre: 2, vampire: 3, liche: 2, dragonSp: 1, drainVie: 3, faiblesse: 2, releverMorts: 2, pacteFuneste: 2, malediction: 2 },
+  },
+  inferno: {
+    label: 'Inferno', icon: '🔥', desc: 'Démons agressifs et magie du feu dévastatrice.',
+    hero: { name: 'Kha-Beleth, seigneur démon', icon: '👺', art: 'Kal-Azaar_Invoker_of_Agony', m: 1, g: 1, d: 0,
+      power: { name: 'Flammes infernales', cost: 2, tgt: 'enemyAny', ai: 'dmg', n: 1, text: 'Inflige 1 dégât à une créature ou au héros ennemi.', fx: (pi, t) => dmg(t, 1) } },
+    deck: { diablotin: 3, cerbere: 3, tourmenteur: 2, succube: 3, demonCornu: 3, pyromancien: 2, diableFosses: 2, archidiable: 1, traitFeu: 3, bouleFeu: 2, pluieFeu: 1, frenesie: 2, pacteDemo: 2, },
+  },
+};
+
+// ====================================================================
+//  État du jeu
+// ====================================================================
+let G = null;
+let uidc = 0;
+const P = i => G.p[i];
+
+function mkPlayer(fac, ai) {
+  const F = FACTIONS[fac], h = F.hero;
+  const deck = [];
+  for (const id in F.deck) for (let k = 0; k < F.deck[id]; k++) deck.push({ ...CARDS[id] });
+  return { fac, ai, hero: h, hp: HERO_HP, maxHp: HERO_HP, m: h.m, g: h.g, d: h.d, res: 0, maxRes: 0,
+           deck: shuffle(deck), hand: [], grave: [], board: [[null, null, null, null], [null, null, null, null]],
+           powerUsed: false, fatigue: 0 };
+}
+
+function newGame(fac) {
+  const ofac = pick(Object.keys(FACTIONS).filter(f => f !== fac));
+  G = { p: [mkPlayer(fac, false), mkPlayer(ofac, true)], cur: 0, phase: 'start', log: [], sel: null,
+        busy: true, turnCount: 0, over: false, winner: null, attacking: null, msg: '' };
+  const first = Math.random() < 0.5 ? 0 : 1;
+  G.cur = first;
+  draw(first, 4, true); draw(1 - first, 5, true);
+  log(`${P(first).hero.name} commence la partie.`, 'turn');
+  render();
+  startTurn();
+}
+
+// ====================================================================
+//  Moteur
+// ====================================================================
+function log(t, cls = '') { G.log.unshift({ t, cls }); if (G.log.length > 120) G.log.pop(); }
+
+function draw(pi, n = 1, silent = false) {
+  const p = P(pi);
+  for (let i = 0; i < n; i++) {
+    if (!p.deck.length) {
+      p.fatigue++;
+      log(`${p.hero.name} n'a plus de cartes : ${p.fatigue} dégât(s) de fatigue.`, 'dmg');
+      damageHero(pi, p.fatigue);
+      continue;
+    }
+    const c = p.deck.pop();
+    if (p.hand.length >= MAX_HAND) { if (!silent) log(`Main pleine : ${c.name} est défaussée.`); continue; }
+    p.hand.push(c);
+  }
+}
+
+function units(pi) {
+  const r = [], b = P(pi).board;
+  for (let row = 0; row < 2; row++) for (let lane = 0; lane < 4; lane++) if (b[row][lane]) r.push({ u: b[row][lane], row, lane, pi });
+  return r;
+}
+function emptySlots(pi) {
+  const r = [], b = P(pi).board;
+  for (let row = 0; row < 2; row++) for (let lane = 0; lane < 4; lane++) if (!b[row][lane]) r.push({ row, lane });
+  return r;
+}
+function findUnit(uid) {
+  for (const pi of [0, 1]) for (const x of units(pi)) if (x.u.uid === uid) return x;
+  return null;
+}
+const U = t => { const f = findUnit(t.uid); return f && f.u; };
+
+function makeUnit(card, pi) {
+  return { ...card, uid: ++uidc, owner: pi, hpMax: card.hp, hpCur: card.hp, atk: card.atk, ret: card.ret, kw: { ...(card.kw || {}) }, moved: false, flash: null };
+}
+function summon(pi, id, preferRow = 0) {
+  const e = emptySlots(pi); if (!e.length) return null;
+  const pref = e.filter(s => s.row === preferRow);
+  const s = pick(pref.length ? pref : e);
+  const u = makeUnit(CARDS[id], pi);
+  P(pi).board[s.row][s.lane] = u;
+  log(`${u.name} rejoint le champ de bataille.`);
+  return u;
+}
+
+function setFlash(obj, text, cls) { obj.flash = { text, cls, k: Math.random() }; scheduleFlashClear(); }
+function scheduleFlashClear() {
+  clearTimeout(G.flashT);
+  G.flashT = setTimeout(() => {
+    if (!G) return;
+    G.p.forEach(p => { p.flash = null; units(G.p.indexOf(p)).forEach(x => x.u.flash = null); });
+    render();
+  }, 900);
+}
+
+function damageUnit(u, n) {
+  if (!u || n <= 0 || u.hpCur <= 0) return 0;
+  const dealt = Math.min(n, u.hpCur);
+  u.hpCur -= n;
+  setFlash(u, '-' + n, '');
+  if (u.hpCur <= 0) kill(u);
+  return dealt;
+}
+function kill(u) {
+  const f = findUnit(u.uid); if (!f) return;
+  P(f.pi).board[f.row][f.lane] = null;
+  P(f.pi).grave.push(u);
+  log(`${u.name} est détruit.`, 'dmg');
+}
+function damageHero(pi, n) {
+  if (n <= 0 || G.over) return;
+  const p = P(pi);
+  p.hp -= n;
+  setFlash(p, '-' + n, '');
+  if (p.hp <= 0) { p.hp = 0; G.over = true; G.winner = 1 - pi; G.busy = true; log(`${P(1 - pi).hero.name} remporte le duel !`, 'turn'); }
+}
+function healUnit(u, n) { const h = Math.min(n, u.hpMax - u.hpCur); if (h > 0) { u.hpCur += h; setFlash(u, '+' + h, 'heal'); } }
+function healHero(pi, n) { const p = P(pi); const h = Math.min(n, p.maxHp - p.hp); if (h > 0) { p.hp += h; setFlash(p, '+' + h, 'heal'); } }
+function buffUnit(u, atk, hp, ret) { if (!u) return; u.atk += atk; u.hpMax += hp; u.hpCur += hp; u.ret += ret; setFlash(u, '▲', 'heal'); }
+function dmg(t, n) { if (t.kind === 'hero') damageHero(t.pi, n); else damageUnit(U(t), n); }
+function heal(t, n) { if (t.kind === 'hero') healHero(t.pi, n); else healUnit(U(t), n); }
+
+function validTargets(pi, tgt) {
+  const r = [], e = 1 - pi;
+  const addU = q => units(q).forEach(x => r.push({ kind: 'unit', uid: x.u.uid }));
+  const addH = q => r.push({ kind: 'hero', pi: q });
+  switch (tgt) {
+    case 'enemyUnit': addU(e); break;
+    case 'allyUnit': addU(pi); break;
+    case 'anyUnit': addU(pi); addU(e); break;
+    case 'enemyAny': addU(e); addH(e); break;
+    case 'allyAny': addU(pi); addH(pi); break;
+  }
+  return r;
+}
+const sameTarget = (a, b) => a.kind === b.kind && (a.kind === 'hero' ? a.pi === b.pi : a.uid === b.uid);
+function targetName(t) { return t.kind === 'hero' ? P(t.pi).hero.name : (U(t) || {}).name; }
+
+function reqMet(pi, c) { const p = P(pi); return Object.entries(c.req || {}).every(([k, v]) => p[k] >= v); }
+function whyNot(pi, c) {
+  const p = P(pi);
+  if (p.res < c.cost) return 'Pas assez de ressources.';
+  for (const [k, v] of Object.entries(c.req || {})) if (p[k] < v) return `Il faut ${STAT[k].name} ${v}.`;
+  if (c.type === 'creature' && !emptySlots(pi).length) return 'Aucun emplacement libre.';
+  if (c.tgt && !validTargets(pi, c.tgt).length) return 'Aucune cible valide.';
+  if (c.can && !c.can(pi)) return 'Impossible pour le moment.';
+  return null;
+}
+const canPlay = (pi, c) => whyNot(pi, c) === null;
+
+function playCard(pi, idx, arg) {
+  const p = P(pi), c = p.hand[idx];
+  if (!c || !canPlay(pi, c)) return false;
+  p.res -= c.cost; p.hand.splice(idx, 1); G.sel = null; G.msg = '';
+  const cls = 'p' + pi;
+  if (c.type === 'creature') {
+    const u = makeUnit(c, pi);
+    p.board[arg.row][arg.lane] = u;
+    log(`${p.hero.name} déploie ${c.name}.`, cls);
+    if (c.onDeploy) c.onDeploy(pi, u);
+  } else {
+    log(`${p.hero.name} joue ${c.name}${arg ? ' sur ' + targetName(arg) : ''}.`, cls);
+    c.fx(pi, arg);
+    p.grave.push(c);
+  }
+  render();
+  return true;
+}
+
+function canUsePower(pi) {
+  const p = P(pi), pw = p.hero.power;
+  if (p.powerUsed || p.res < pw.cost) return false;
+  if (pw.tgt && !validTargets(pi, pw.tgt).length) return false;
+  if (pw.can && !pw.can(pi)) return false;
+  return true;
+}
+function usePower(pi, t) {
+  const p = P(pi), pw = p.hero.power;
+  if (!canUsePower(pi)) return;
+  p.res -= pw.cost; p.powerUsed = true; G.sel = null; G.msg = '';
+  log(`${p.hero.name} utilise ${pw.name}${t ? ' sur ' + targetName(t) : ''}.`, 'p' + pi);
+  pw.fx(pi, t);
+  render();
+}
+
+const adjacent = (a, b) => (a.row === b.row && Math.abs(a.lane - b.lane) === 1) || (a.lane === b.lane && a.row !== b.row);
+function moveUnit(pi, uid, row, lane) {
+  const f = findUnit(uid), p = P(pi);
+  if (!f || f.pi !== pi || f.u.moved || p.res < 1 || p.board[row][lane] || !adjacent(f, { row, lane })) return false;
+  p.board[f.row][f.lane] = null; p.board[row][lane] = f.u;
+  f.u.moved = true; p.res -= 1; G.sel = null;
+  log(`${f.u.name} se déplace.`, 'p' + pi);
+  render();
+  return true;
+}
+
+// --------------------------- Combat ---------------------------------
+async function combat(pi) {
+  const p = P(pi), e = P(1 - pi);
+  for (let lane = 0; lane < 4; lane++) for (let row = 0; row < 2; row++) {
+    const u = p.board[row][lane];
+    if (!u || u.atk <= 0) continue;
+    if (u.at === 'melee' && row !== 0) continue; // la mêlée n'attaque que depuis l'avant
+    G.attacking = u.uid; render(); await sleep(420);
+    if (u.at === 'magic') {
+      // Attaque magique : touche toutes les créatures du couloir, sinon le héros
+      const ts = [e.board[0][lane], e.board[1][lane]].filter(Boolean);
+      if (ts.length) ts.forEach(t => damageUnit(t, u.atk));
+      else { damageHero(1 - pi, u.atk); log(`${u.name} frappe ${e.hero.name} (${u.atk}).`, 'dmg'); }
+    } else {
+      const t = e.board[0][lane] || e.board[1][lane];
+      let dealt;
+      if (t) {
+        const ret = t.ret;
+        dealt = damageUnit(t, u.atk);
+        // Riposte : uniquement contre la mêlée
+        if (u.at === 'melee' && !u.kw.noret && ret > 0) damageUnit(u, ret);
+      } else {
+        dealt = Math.min(u.atk, e.hp);
+        damageHero(1 - pi, u.atk);
+        log(`${u.name} frappe ${e.hero.name} (${u.atk}).`, 'dmg');
+      }
+      if (u.kw.vampire && u.hpCur > 0 && dealt > 0) healUnit(u, dealt);
+    }
+    G.attacking = null; render(); await sleep(220);
+    if (G.over) return;
+  }
+}
+
+// ------------------------ Déroulement du tour -------------------------
+async function startTurn() {
+  const pi = G.cur, p = P(pi);
+  G.busy = true; G.sel = null; G.msg = '';
+  p.maxRes = Math.min(MAX_RES, p.maxRes + 1); p.res = p.maxRes; p.powerUsed = false;
+  log(`— Tour de ${p.hero.name} —`, 'turn');
+  for (const { u } of units(pi)) { u.moved = false; if (u.kw.regen) healUnit(u, u.kw.regen); }
+  if (G.turnCount > 0) draw(pi, 1);
+  G.turnCount++;
+  if (G.over) { render(); return; }
+  G.phase = 'combat'; render();
+  if (units(pi).length) { await sleep(400); await combat(pi); }
+  if (G.over) { render(); return; }
+  G.phase = 'develop';
+  if (p.ai) { render(); await aiTurn(); }
+  else { G.busy = false; render(); }
+}
+
+function develop(key) {
+  const pi = G.cur, p = P(pi);
+  if (G.phase !== 'develop') return;
+  if (key === 'draw') { draw(pi, 1); log(`${p.hero.name} pioche une carte supplémentaire.`, 'p' + pi); }
+  else { p[key]++; log(`${p.hero.name} développe sa ${STAT[key].name} (${p[key]}).`, 'p' + pi); }
+  G.phase = 'main'; render();
+}
+
+async function endTurn() {
+  if (G.over) return;
+  G.sel = null; G.cur = 1 - G.cur;
+  await startTurn();
+}
+
+// ====================================================================
+//  IA
+// ====================================================================
+const unitValue = u => u.atk * 1.5 + u.hpCur + u.ret + (u.kw && Object.keys(u.kw).length ? 1 : 0);
+const cardValue = c => c.atk * 1.5 + c.hp + c.ret + (c.kw ? 1.5 : 0) + (c.onDeploy ? 1.5 : 0);
+
+function aiDev(pi) {
+  const p = P(pi), need = { m: 0, g: 0, d: 0 };
+  for (const c of p.hand) for (const [k, v] of Object.entries(c.req || {})) {
+    const def = v - p[k];
+    if (def > 0) need[k] += def === 1 ? 3 : 1;
+  }
+  let best = null, bv = 0;
+  for (const k in need) if (need[k] > bv) { bv = need[k]; best = k; }
+  if (best) return best;
+  if (p.hand.length <= 2) return 'draw';
+  if (p.m < 4) return 'm';
+  return 'draw';
+}
+
+function slotScore(pi, c, s) {
+  const e = P(1 - pi);
+  let sc = 0;
+  if (c.at === 'melee') { if (s.row === 1) return -50; }
+  else { sc += s.row === 1 ? 1.5 : -1; if (s.row === 1 && P(pi).board[0][s.lane]) sc += 1; }
+  const t = e.board[0][s.lane] || e.board[1][s.lane];
+  if (!t) sc += 2;
+  else {
+    if (t.hpCur <= c.atk) sc += 3;
+    if (c.at === 'melee' && !(c.kw && c.kw.noret) && t.ret >= c.hp) sc -= 3;
+  }
+  return sc + Math.random() * 0.5;
+}
+
+function targetScore(pi, kind, n, t) {
+  const tu = t.kind === 'unit' ? U(t) : null;
+  switch (kind) {
+    case 'dmg':
+      if (tu) return tu.hpCur <= n ? unitValue(tu) + 2 : n * 0.6;
+      return P(t.pi).hp <= n ? 999 : n * 0.7;
+    case 'heal':
+      if (tu) return Math.min(n, tu.hpMax - tu.hpCur) * 0.9;
+      return Math.min(n, P(t.pi).maxHp - P(t.pi).hp) * (P(t.pi).hp < 10 ? 1.2 : 0.6);
+    case 'buff': return unitValue(tu) * 0.3 + 2;
+    case 'debuff': return Math.min(n, tu.atk) * 1.2;
+    case 'sacrifice': return P(pi).hand.length < 5 ? 5 - unitValue(tu) : 0;
+  }
+  return 0;
+}
+
+function aiBest(pi) {
+  const p = P(pi); let best = null;
+  const consider = (score, run) => { if (!best || score > best.score) best = { score, run }; };
+  p.hand.forEach((c, i) => {
+    if (!canPlay(pi, c)) return;
+    if (c.type === 'creature') {
+      for (const s of emptySlots(pi)) consider(cardValue(c) + slotScore(pi, c, s), () => playCard(pi, i, s));
+    } else if (c.tgt) {
+      for (const t of validTargets(pi, c.tgt)) consider(targetScore(pi, c.ai, c.n, t), () => playCard(pi, i, t));
+    } else consider(c.aiScore ? c.aiScore(pi) : 2, () => playCard(pi, i, null));
+  });
+  return best;
+}
+
+async function aiTurn() {
+  const pi = G.cur, p = P(pi);
+  await sleep(500);
+  develop(aiDev(pi));
+  await sleep(500);
+  for (let k = 0; k < 15 && !G.over; k++) {
+    const a = aiBest(pi);
+    if (!a || a.score < 1) break;
+    a.run(); await sleep(750);
+  }
+  if (G.over) return;
+  // Pouvoir héroïque
+  if (canUsePower(pi)) {
+    const pw = p.hero.power;
+    if (pw.tgt) {
+      let bt = null, bs = 1;
+      for (const t of validTargets(pi, pw.tgt)) { const s = targetScore(pi, pw.ai, pw.n, t); if (s >= bs) { bs = s; bt = t; } }
+      if (bt) { usePower(pi, bt); await sleep(700); }
+    } else if (!pw.aiScore || pw.aiScore(pi) >= 1) { usePower(pi, null); await sleep(700); }
+  }
+  if (G.over) return;
+  // Avance les créatures de mêlée bloquées à l'arrière
+  for (const x of units(pi)) {
+    if (x.row === 1 && x.u.at === 'melee' && !p.board[0][x.lane] && p.res >= 1) { moveUnit(pi, x.u.uid, 0, x.lane); await sleep(500); }
+  }
+  await sleep(400);
+  endTurn();
+}
+
+// ====================================================================
+//  Interactions du joueur
+// ====================================================================
+const myTurn = () => G && !G.over && G.cur === 0 && !G.busy;
+
+function clickHand(i) {
+  if (!myTurn()) return;
+  if (G.phase !== 'main') { G.msg = 'Choisissez d\'abord votre développement.'; render(); return; }
+  const c = P(0).hand[i], why = whyNot(0, c);
+  if (why) { G.msg = why; G.sel = null; render(); return; }
+  if (G.sel && G.sel.kind === 'hand' && G.sel.idx === i) { G.sel = null; G.msg = ''; render(); return; }
+  if (c.type !== 'creature' && !c.tgt) { playCard(0, i, null); return; }
+  G.sel = { kind: 'hand', idx: i };
+  G.msg = c.type === 'creature' ? 'Choisissez un emplacement libre (clic droit pour annuler).' : 'Choisissez une cible (clic droit pour annuler).';
+  render();
+}
+
+function clickSlot(pi, row, lane) {
+  if (!myTurn() || G.phase !== 'main') return;
+  const u = P(pi).board[row][lane], sel = G.sel;
+  if (sel && sel.kind === 'hand') {
+    const c = P(0).hand[sel.idx];
+    if (c.type === 'creature') { if (pi === 0 && !u) playCard(0, sel.idx, { row, lane }); return; }
+    if (u) { const t = { kind: 'unit', uid: u.uid }; if (validTargets(0, c.tgt).some(x => sameTarget(x, t))) playCard(0, sel.idx, t); }
+    return;
+  }
+  if (sel && sel.kind === 'power') {
+    if (u) { const t = { kind: 'unit', uid: u.uid }; if (validTargets(0, P(0).hero.power.tgt).some(x => sameTarget(x, t))) usePower(0, t); }
+    return;
+  }
+  if (sel && sel.kind === 'move' && pi === 0 && !u) { moveUnit(0, sel.uid, row, lane); return; }
+  if (pi === 0 && u) {
+    if (u.moved) { G.msg = 'Cette créature s\'est déjà déplacée ce tour-ci.'; G.sel = null; }
+    else if (P(0).res < 1) { G.msg = 'Déplacer une créature coûte 1 ressource.'; G.sel = null; }
+    else { G.sel = { kind: 'move', uid: u.uid }; G.msg = 'Choisissez une case adjacente libre (coût : 1 💎).'; }
+    render(); return;
+  }
+  G.sel = null; G.msg = ''; render();
+}
+
+function clickHero(pi) {
+  if (!myTurn() || G.phase !== 'main' || !G.sel) return;
+  const t = { kind: 'hero', pi };
+  if (G.sel.kind === 'hand') {
+    const c = P(0).hand[G.sel.idx];
+    if (c.tgt && validTargets(0, c.tgt).some(x => sameTarget(x, t))) playCard(0, G.sel.idx, t);
+  } else if (G.sel.kind === 'power') {
+    if (validTargets(0, P(0).hero.power.tgt).some(x => sameTarget(x, t))) usePower(0, t);
+  }
+}
+
+function clickPower() {
+  if (!myTurn() || G.phase !== 'main') return;
+  if (!canUsePower(0)) { G.msg = 'Pouvoir indisponible.'; render(); return; }
+  const pw = P(0).hero.power;
+  if (!pw.tgt) { usePower(0, null); return; }
+  G.sel = { kind: 'power' }; G.msg = 'Choisissez la cible du pouvoir.'; render();
+}
+
+function clickEndTurn() { if (myTurn() && G.phase === 'main') endTurn(); }
+function clickDevelop(k) { if (myTurn() && G.phase === 'develop') develop(k); }
+function cancelSel() { if (G && G.sel) { G.sel = null; G.msg = ''; render(); } }
+document.addEventListener('contextmenu', e => { e.preventDefault(); cancelSel(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') cancelSel();
+  if (e.key === ' ' && myTurn() && G.phase === 'main') { e.preventDefault(); clickEndTurn(); }
+});
+
+// ====================================================================
+//  Rendu
+// ====================================================================
+function highlights() {
+  const h = { slots: new Set(), units: new Set(), heroes: new Set() };
+  if (!G.sel || G.cur !== 0) return h;
+  const addTargets = list => list.forEach(t => t.kind === 'hero' ? h.heroes.add(t.pi) : h.units.add(t.uid));
+  if (G.sel.kind === 'hand') {
+    const c = P(0).hand[G.sel.idx];
+    if (c.type === 'creature') emptySlots(0).forEach(s => h.slots.add(`0-${s.row}-${s.lane}`));
+    else addTargets(validTargets(0, c.tgt));
+  } else if (G.sel.kind === 'power') addTargets(validTargets(0, P(0).hero.power.tgt));
+  else if (G.sel.kind === 'move') {
+    const f = findUnit(G.sel.uid);
+    if (f) emptySlots(0).filter(s => adjacent(f, s)).forEach(s => h.slots.add(`0-${s.row}-${s.lane}`));
+  }
+  return h;
+}
+
+const artStyle = a => a ? `style="background-image:url('img/art/${a}.webp')"` : '';
+const artInner = (a, icon) => a ? '' : `<span class="emoji">${icon}</span>`;
+
+function kwList(c) {
+  const k = c.kw || {}, r = [];
+  if (k.regen) r.push(`Régénération ${k.regen}`);
+  if (k.noret) r.push('Aucune riposte subie');
+  if (k.vampire) r.push('Vampirisme');
+  return r;
+}
+function descOf(c) {
+  const parts = kwList(c).map(x => `<b>${x}</b>`);
+  if (c.text) parts.push(c.text);
+  return parts.join('<br>');
+}
+function typeLabel(c) {
+  if (c.type === 'creature') return `Créature – ${AT[c.at].icon} ${AT[c.at].name}`;
+  if (c.type === 'spell') return `Sort – ${c.school}`;
+  return 'Fortune';
+}
+function reqHTML(c, pi) {
+  return Object.entries(c.req || {}).map(([k, v]) =>
+    `<span class="sb ${k} ${pi !== undefined && P(pi)[k] < v ? 'miss' : ''}" title="${STAT[k].name} ${v}">${v}</span>`).join('');
+}
+function statBadges(atk, ret, hp, dmg) {
+  return `<div class="ust"><span class="b atk" title="Attaque">${atk}</span><span class="b ret" title="Riposte">${ret}</span>
+    <span class="b hp ${dmg ? 'dmg' : ''}" title="Points de vie">${hp}</span></div>`;
+}
+function flashHTML(o) { return o.flash ? `<div class="flash ${o.flash.cls}">${o.flash.text}</div>` : ''; }
+
+function handCardHTML(c, i) {
+  const playable = myTurn() && G.phase === 'main' && canPlay(0, c);
+  const sel = G.sel && G.sel.kind === 'hand' && G.sel.idx === i;
+  return `<div class="card ${c.type} ${playable ? 'playable' : ''} ${sel ? 'sel' : ''}" onclick="clickHand(${i})" onmouseenter="pv('h',${i})">
+    <div class="cart" ${artStyle(c.art)}>${artInner(c.art, c.icon)}</div>
+    <div class="cost">${c.cost}</div><div class="creqs">${reqHTML(c, 0)}</div>
+    ${c.type === 'creature' ? statBadges(c.atk, c.ret, c.hp) : ''}
+    <div class="cbar"><div class="cname">${c.name}</div></div></div>`;
+}
+
+function unitHTML(u, pi, hl) {
+  const cls = ['unit', 'p' + pi];
+  if (hl.units.has(u.uid)) cls.push('target');
+  if (G.sel && G.sel.kind === 'move' && G.sel.uid === u.uid) cls.push('sel');
+  if (G.attacking === u.uid) cls.push('attacking');
+  if (u.moved) cls.push('moved');
+  const kw = (u.kw.regen ? '♻' : '') + (u.kw.noret ? '🪶' : '') + (u.kw.vampire ? '🩸' : '');
+  return `<div class="${cls.join(' ')}" ${artStyle(u.art)} onmouseenter="pv('u',${u.uid})">${artInner(u.art, u.icon)}
+    <span class="utag" title="${AT[u.at].name}">${AT[u.at].icon}</span>${kw ? `<span class="ukw">${kw}</span>` : ''}
+    ${statBadges(u.atk, u.ret, u.hpCur, u.hpCur < u.hpMax)}${flashHTML(u)}</div>`;
+}
+function slotHTML(pi, row, lane, hl) {
+  const u = P(pi).board[row][lane];
+  return `<div class="slot ${hl.slots.has(`${pi}-${row}-${lane}`) ? 'target' : ''}" onclick="clickSlot(${pi},${row},${lane})"
+    title="${row === 0 ? 'Avant' : 'Arrière'}">${u ? unitHTML(u, pi, hl) : ''}</div>`;
+}
+function gridHTML(hl) {
+  const att = G.attacking && findUnit(G.attacking);
+  let s = '<div class="grid">';
+  for (let lane = 0; lane < 4; lane++) {
+    s += slotHTML(0, 1, lane, hl) + slotHTML(0, 0, lane, hl)
+       + `<div class="lane ${att && att.lane === lane ? 'hot' : ''}"></div>`
+       + slotHTML(1, 0, lane, hl) + slotHTML(1, 1, lane, hl);
+  }
+  return s + '</div>';
+}
+
+function heroColHTML(pi, hl) {
+  const p = P(pi), h = p.hero, pw = h.power;
+  const top = p.grave[p.grave.length - 1];
+  const ready = pi === 0 && myTurn() && G.phase === 'main' && canUsePower(0);
+  const power = pi === 0
+    ? `<button class="power ${ready ? 'ready' : ''}" onclick="clickPower()" onmouseenter="pv('hero',0)" ${ready ? '' : 'disabled'}>✨ ${pw.name} · ${pw.cost}💎</button>`
+    : `<button class="power" disabled onmouseenter="pv('hero',1)">✨ ${pw.name} · ${pw.cost}💎</button>`;
+  return `<div class="herocol">
+    <div class="herocard p${pi} ${G.cur === pi ? 'active' : ''} ${hl.heroes.has(pi) ? 'target' : ''}" ${artStyle(h.art)}
+      onclick="clickHero(${pi})" onmouseenter="pv('hero',${pi})">${artInner(h.art, h.icon)}
+      <div class="herohp">${p.hp}</div>${flashHTML(p)}</div>
+    ${power}
+    <div class="piles">
+      <div class="pile deck" title="Bibliothèque"><span class="cnt">${p.deck.length}</span><small>Deck</small></div>
+      <div class="pile grave" ${top ? artStyle(top.art) : ''} title="Cimetière"><span class="cnt">${p.grave.length}</span><small>Cimetière</small></div>
+    </div></div>`;
+}
+
+function sideHTML(pi) {
+  const p = P(pi), dev = pi === 0 && myTurn() && G.phase === 'develop';
+  const stat = k => `<span class="sb ${k} ${dev ? 'dev' : ''}" title="${STAT[k].name}" ${dev ? `onclick="clickDevelop('${k}')"` : ''}>${p[k]}${dev ? '<span class="plus">+</span>' : ''}</span>`;
+  return `<div class="tb-side p${pi} ${G.cur === pi ? 'active' : ''}">
+    <div class="banner ${p.fac}">${FACTIONS[p.fac].icon}</div>
+    <div class="pinfo"><div class="pname">${p.hero.name}</div>
+      <div class="statrow">${stat('m')}${stat('g')}${stat('d')}
+        ${dev ? `<button class="drawbtn" onclick="clickDevelop('draw')">🂠 Piocher</button>` : `<span class="psub">Main ${p.hand.length}</span>`}</div></div>
+    <div class="resc" title="Ressources"><b>${p.res}</b><small>${p.maxRes}</small></div></div>`;
+}
+
+function topbarHTML() {
+  const mine = myTurn() && G.phase === 'main';
+  const label = G.over ? 'Fin' : G.cur !== 0 ? 'Tour adverse' : G.phase === 'combat' ? 'Combat…' : G.phase === 'develop' ? 'Dévelop&shy;pement' : 'Fin du tour';
+  return `<div class="topbar">
+    <button class="menubtn" title="Menu" onclick="if(confirm('Abandonner et revenir au menu ?')){G=null;render();}">⚙</button>
+    ${sideHTML(0)}<button class="endturn" onclick="clickEndTurn()" ${mine ? '' : 'disabled'}>${label}<small>Tour ${Math.ceil(G.turnCount / 2)}</small></button>${sideHTML(1)}</div>`;
+}
+
+function headHTML() {
+  if (G.over) return 'Partie terminée';
+  if (G.cur !== 0 || G.busy) return G.phase === 'combat' ? '⚔️ Combat en cours…' : 'L\'adversaire réfléchit…';
+  if (G.phase === 'develop') return `Développement :
+    <button onclick="clickDevelop('m')">+1 Puissance</button><button onclick="clickDevelop('g')">+1 Magie</button>
+    <button onclick="clickDevelop('d')">+1 Destinée</button><button onclick="clickDevelop('draw')">Piocher</button>`;
+  return G.msg || 'Jouez vos cartes, déplacez vos créatures (1💎), puis terminez le tour.';
+}
+
+function hovered() {
+  const h = G.hover; if (!h) return null;
+  if (h.kind === 'h') return P(0).hand[h.x] ? { c: P(0).hand[h.x] } : null;
+  if (h.kind === 'u') { const f = findUnit(h.x); return f ? { c: f.u, unit: true } : null; }
+  if (h.kind === 'hero') return { hero: h.x };
+  return null;
+}
+function infoBodyHTML() {
+  const hv = hovered();
+  if (!hv) return '<div class="ihint">Survolez une carte pour voir ses détails.</div>';
+  if (hv.hero !== undefined) {
+    const p = P(hv.hero), h = p.hero, pw = h.power;
+    return `<div class="iart" ${artStyle(h.art)}>${artInner(h.art, h.icon)}</div><div class="itext">
+      <div class="iname">${h.name}</div><div class="itype">Héros – ${FACTIONS[p.fac].label}</div>
+      <div class="idesc"><b>✨ ${pw.name} (${pw.cost}💎)</b> : ${pw.text}</div>
+      <div class="istats"><span class="hpv">❤ ${p.hp}/${p.maxHp}</span><span>Deck ${p.deck.length}</span><span>Main ${p.hand.length}</span></div></div>`;
+  }
+  const c = hv.c;
+  const stats = c.type === 'creature'
+    ? `<div class="istats"><span class="atk">🗡 ${c.atk}</span><span class="ret">↺ ${c.ret}</span><span class="hpv">❤ ${hv.unit ? c.hpCur + '/' + c.hpMax : c.hp}</span></div>` : '';
+  return `<div class="iart" ${artStyle(c.art)}>${artInner(c.art, c.icon)}</div><div class="itext">
+    <div class="iname">${c.name}</div><div class="itype">${typeLabel(c)}</div>
+    <div class="ireqs"><span class="cost" style="position:static;width:22px;height:22px;font-size:12px">${c.cost}</span>${reqHTML(c, hv.unit ? undefined : 0)}</div>
+    <div class="idesc">${descOf(c) || '<i style="color:#9c8c70">Aucune capacité.</i>'}</div>${stats}</div>`;
+}
+
+function pv(kind, x) {
+  G.hover = { kind, x };
+  const el = $('#ibody');
+  if (el) el.innerHTML = infoBodyHTML();
+}
+
+function render() {
+  const app = $('#app');
+  if (!G) { app.innerHTML = menuHTML(); return; }
+  const hl = highlights();
+  const logScroll = $('#log') ? $('#log').scrollTop : 0;
+  app.innerHTML = `<div class="game">
+    ${topbarHTML()}
+    <div class="field">
+      <div class="half l" style="background-image:url('img/bg/${P(0).fac}.webp')"></div>
+      <div class="half r" style="background-image:url('img/bg/${P(1).fac}.webp')"></div>
+      ${heroColHTML(0, hl)}${gridHTML(hl)}${heroColHTML(1, hl)}
+    </div>
+    <div class="bottom">
+      <div class="hand">${P(0).hand.map(handCardHTML).join('')}</div>
+      <div class="info"><div class="ihead">${headHTML()}</div><div class="ibody" id="ibody">${infoBodyHTML()}</div></div>
+      <div class="log" id="log">${G.log.map(l => `<div class="${l.cls}">${l.t}</div>`).join('')}</div>
+    </div>
+  </div>
+  ${G.over ? `<div class="overlay"><h1>${G.winner === 0 ? '🏆 Victoire !' : '💀 Défaite…'}</h1>
+     <button onclick="G=null;render()">Rejouer</button></div>` : ''}`;
+  $('#log').scrollTop = logScroll;
+}
+
+function menuHTML() {
+  return `<div class="menu">
+    <h1>Duel of Champions</h1>
+    <div>Choisissez votre faction — l'adversaire (IA) en prendra une autre au hasard.</div>
+    <div class="facs">${Object.entries(FACTIONS).map(([k, f]) => `
+      <div class="fac" onclick="newGame('${k}')" ${artStyle(f.hero.art)}>
+        <div class="ftxt"><h2>${f.icon} ${f.label}</h2><div><b>${f.hero.name}</b></div><p style="margin:4px 0">${f.desc}</p>
+        <div>✨ <b>${f.hero.power.name}</b> (${f.hero.power.cost}💎) : ${f.hero.power.text}</div></div></div>`).join('')}
+    </div>
+    <div class="rules">
+      <b>Règles</b><br>
+      • Chaque héros a ${HERO_HP} PV. Réduisez ceux de l'adversaire à 0 pour gagner.<br>
+      • Chaque camp possède 2 colonnes (avant / arrière) de 4 couloirs, face à face.<br>
+      • Début de tour : +1 ressource max (jusqu'à ${MAX_RES}), ressources rechargées, pioche d'une carte, puis <b>vos créatures attaquent automatiquement</b> dans leur couloir.<br>
+      • Ensuite, choisissez un <b>développement</b> en cliquant sur une caractéristique en haut : Puissance, Magie, Destinée, ou piochez une carte. Chaque carte exige un coût 💎 et un niveau minimum dans ces caractéristiques.<br>
+      • <b>Mêlée</b> 🗡️ : n'attaque que depuis la colonne avant, frappe la première créature du couloir et subit sa <b>riposte</b>.<br>
+      • <b>Tireur</b> 🏹 : attaque depuis n'importe quelle colonne, sans riposte.<br>
+      • <b>Magique</b> 🔮 : touche toutes les créatures ennemies du couloir.<br>
+      • S'il n'y a aucune créature ennemie dans le couloir, l'attaque touche le héros adverse.<br>
+      • Cliquez sur une de vos créatures puis sur une case adjacente libre pour la déplacer (1💎, une fois par tour).<br>
+      • Clic droit ou Échap pour annuler une sélection, Espace pour finir le tour.
+    </div></div>`;
+}
+
+render();
+</script>
+</body>
+</html>
