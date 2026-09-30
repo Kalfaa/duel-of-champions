@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build lightweight card art thumbnails and faction board backgrounds from img/cards/."""
+"""Build lightweight card art thumbnails and faction board backgrounds (served by game-client) from img/cards/."""
 from pathlib import Path
 from PIL import Image, ImageEnhance, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "img" / "cards"
-ART = ROOT / "img" / "art"
-BG = ROOT / "img" / "bg"
+ART = ROOT / "game-client" / "public" / "img" / "art"
+BG = ROOT / "game-client" / "public" / "img" / "bg"
 LOGO_CUT = 0.80  # the bottom ~20% of every artwork holds the Duel of Champions logo
 BACKGROUNDS = {"havre": "Sun_crusader_card.jpg", "necropole": "Ghost_dragon_card.jpg", "inferno": "Abyssal_lord_card.jpg"}
 

@@ -1,0 +1,237 @@
+*{box-sizing:border-box}
+:root{--gold:#c9a45a;--gold-l:#f3d58a;--sh:clamp(78px,calc((100vh - 318px) / 4),150px);--sw:calc(var(--sh) * .9)}
+body{margin:0;background:#0a0908;color:#eee;font-family:Georgia,"Times New Roman",serif;min-height:100vh;user-select:none;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--gold);background:linear-gradient(#5a4128,#2a1c0c);color:#f5e6c8;padding:5px 10px;font-size:13px}
+button:hover:not(:disabled){filter:brightness(1.3)}
+button:disabled{opacity:.4;cursor:default}
+.game{display:grid;grid-template-rows:78px 1fr 206px;grid-template-columns:minmax(0,1fr);height:100vh;min-width:1180px}
+
+/* ---------- Barre supérieure ---------- */
+.topbar{display:flex;align-items:center;justify-content:center;gap:0;background:linear-gradient(#3a3228,#17120c);border-bottom:3px solid var(--gold);box-shadow:0 4px 18px #000;position:relative;z-index:4}
+.tb-side{display:flex;align-items:center;gap:14px;width:470px;height:62px;padding:0 14px;background:linear-gradient(#2a241c,#110d09);border:2px solid #7a6238;border-radius:8px}
+.tb-side.p0{border-radius:30px 8px 8px 30px;justify-content:flex-start}
+.tb-side.p1{border-radius:8px 30px 30px 8px;flex-direction:row-reverse}
+.tb-side.active{border-color:var(--gold-l);box-shadow:0 0 14px #f3d58a55 inset}
+.banner{width:44px;height:66px;margin-top:10px;clip-path:polygon(0 0,100% 0,100% 100%,50% 84%,0 100%);display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-size:22px;border-top:3px solid var(--gold)}
+.banner.havre{background:linear-gradient(#3c6fc0,#173263)}
+.banner.necropole{background:linear-gradient(#3d8a45,#11361a)}
+.banner.inferno{background:linear-gradient(#d0452a,#5c140a)}
+.pinfo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.tb-side.p1 .pinfo{align-items:flex-end}
+.pname{font-weight:bold;color:var(--gold-l);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px;background:#0008;padding:1px 10px;border-radius:4px;border:1px solid #5a4a30}
+.psub{font-size:11px;color:#b9a582}
+.statrow{display:flex;gap:8px;align-items:center}
+.sb{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;font-weight:bold;font-size:15px;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000;position:relative}
+.sb.m{background:linear-gradient(135deg,#e4e8ee 0,#8a929e 35%,#4a525e 70%,#2a3038);border-radius:5px 5px 50% 50%/5px 5px 60% 60%;border:2px solid #1c2026;box-shadow:inset 0 1px 0 #fff8,0 1px 3px #000}
+.sb.g{background:radial-gradient(circle at 34% 28%,#fff 0,#bfe6ff 12%,#3c9ae6 38%,#0e4a9a 70%,#06214a);border-radius:50%;border:2px solid #0a1a36;box-shadow:inset 0 -2px 4px #0008,0 0 5px #3c9ae6aa}
+.sb.d{background:radial-gradient(circle at 35% 28%,#f4e6ff 0,#c08cff 22%,#7a36d8 55%,#3a0e7a);border-radius:6px;border:2px solid #1c0c3a;box-shadow:inset 0 -2px 4px #0008,0 0 5px #9a6ad8aa}
+.sb.dev{cursor:pointer;animation:glow 1s infinite;box-shadow:0 0 12px #ffe27a}
+@keyframes glow{50%{box-shadow:0 0 3px #ffe27a}}
+.sb .plus{position:absolute;top:-8px;right:-8px;font-size:11px;background:#2a6a2a;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;border:1px solid #8f8}
+.drawbtn{padding:3px 7px;font-size:11px}
+.resc{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 50% 30%,#5a5a5a,#1a1a1a 60%,#0a0a0a);border:3px solid #d8dbe0;box-shadow:0 0 0 3px #1a1a1a,0 0 0 5px #8b9098,0 3px 8px #000;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none}
+.resc b{font-size:24px;color:#fff}.resc small{font-size:12px;color:#6cc8ff;font-weight:bold}
+.endturn{width:104px;height:104px;margin:14px -8px -40px;border-radius:50%;border:5px solid var(--gold);background:radial-gradient(circle at 50% 40%,#ffb347,#e2541c 45%,#7a1a06);color:#fff3d0;font-size:15px;font-weight:bold;text-transform:uppercase;text-shadow:0 1px 3px #000;box-shadow:0 0 0 3px #3a2a12,0 6px 18px #000,0 0 22px #ff7a2a88;z-index:5;line-height:1.1;padding:0}
+.endturn:disabled{opacity:1;background:radial-gradient(circle at 50% 40%,#7a7060,#3a3228 50%,#1a150f);color:#bba;box-shadow:0 0 0 3px #3a2a12,0 6px 18px #000}
+.menubtn{position:absolute;left:8px;top:8px;font-size:16px;padding:2px 8px}
+.endturn small{display:block;font-size:10px;font-weight:normal;text-transform:none;margin-top:3px;opacity:.85}
+
+/* ---------- Champ de bataille ---------- */
+.field{position:relative;display:flex;align-items:center;justify-content:center;gap:26px;overflow:visible;padding:14px 10px 6px}
+.half{position:absolute;top:0;bottom:0;width:55%;background-size:cover;background-position:center 30%;opacity:.9;pointer-events:none}
+.half.l{left:0;-webkit-mask-image:linear-gradient(90deg,#000 55%,transparent);mask-image:linear-gradient(90deg,#000 55%,transparent)}
+.half.r{right:0;-webkit-mask-image:linear-gradient(270deg,#000 55%,transparent);mask-image:linear-gradient(270deg,#000 55%,transparent)}
+.field::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 40%,#000a);pointer-events:none}
+.grid{display:grid;grid-template-columns:repeat(2,var(--sw)) 48px repeat(2,var(--sw));grid-auto-rows:var(--sh);gap:8px 10px;position:relative;z-index:1}
+.slot{position:relative;border:2px solid #d8ccb030;border-radius:4px;background:#0000004d;cursor:pointer}
+.slot::before{content:"";position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #d8ccb030;background:#ffffff06}
+.slot.target{border-color:#7f7;box-shadow:0 0 14px #5f5 inset,0 0 8px #5f5}
+.slot.target::before{border-color:#7f7}
+.lane{display:flex;align-items:center;justify-content:center}
+.lane::before{content:"";width:34px;height:34px;border-radius:50%;border:2px solid #d8ccb028;box-shadow:0 0 0 5px #0003 inset}
+.lane.hot::before{border-color:#ffb050;box-shadow:0 0 12px #ffb050}
+
+.unit{position:absolute;inset:3px;border-radius:4px;background:#241a0e center 20%/cover no-repeat;border:2px solid #999;transition:transform .22s,box-shadow .22s;box-shadow:0 3px 8px #000c;display:flex;align-items:center;justify-content:center}
+.unit.p0{border-color:#86c26a}.unit.p1{border-color:#d8503a}
+.unit .emoji{font-size:34px}
+.unit.target{box-shadow:0 0 18px #f44;border-color:#ff5050;animation:pulse 1s infinite}
+.unit.sel{box-shadow:0 0 18px #ff0;border-color:#ff0}
+/* Aller-retour vers l'adversaire : la carte revient toujours à sa place à la fin de l'animation */
+.unit.attacking{z-index:5;--lunge-glow:#fa0}
+.unit.attacking.riposte{--lunge-glow:#6cf}
+.unit.attacking.p0{animation:lunge-r .5s ease-in-out}
+.unit.attacking.p1{animation:lunge-l .5s ease-in-out}
+@keyframes lunge-r{40%{transform:translateX(22px) scale(1.12);box-shadow:0 0 22px var(--lunge-glow)}}
+@keyframes lunge-l{40%{transform:translateX(-22px) scale(1.12);box-shadow:0 0 22px var(--lunge-glow)}}
+/* Créature détruite : reste visible le temps de voir le coup, puis s'efface */
+.unit.dying{pointer-events:none;animation:dying .7s ease-in forwards}
+@keyframes dying{0%,35%{opacity:1}100%{opacity:0;transform:scale(.7) rotate(-6deg);filter:grayscale(1) brightness(.5)}}
+.unit.moved{filter:saturate(.55) brightness(.85)}
+@keyframes pulse{50%{box-shadow:0 0 4px #f44}}
+.ust{position:absolute;left:3px;bottom:3px;display:flex;flex-direction:column;gap:2px}
+/* Attaque (rond sombre), riposte (losange sombre), PV (rond rouge), comme sur les cartes officielles */
+.b{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;color:#fff;text-shadow:0 0 3px #000,0 1px 1px #000;position:relative;isolation:isolate;
+  background:radial-gradient(circle at 50% 35%,#4a4a4a,#141414 70%);border:2px solid #c4c8cf;box-shadow:0 0 0 1px #111,0 2px 3px #000}
+.b.ret{width:20px;height:20px;font-size:12px;margin-left:1px;background:none;border:none;box-shadow:none}
+.b.ret::before{content:"";position:absolute;inset:2px;transform:rotate(45deg);z-index:-1;background:radial-gradient(circle at 50% 35%,#4a4a4a,#141414 75%);border:2px solid #c4c8cf;box-shadow:0 0 0 1px #111,0 2px 3px #000}
+.b.hp{width:24px;height:24px;font-size:14px;margin-left:-1px;border-color:#2a0806;box-shadow:0 0 0 1px #d8a09a,0 2px 3px #000}
+.b.hp.dmg{color:#ffe070}
+.utag{position:absolute;top:2px;right:2px;font-size:12px;background:#000a;border-radius:4px;padding:0 2px;line-height:16px}
+.ukw{position:absolute;top:2px;left:2px;font-size:11px;background:#000a;border-radius:4px;padding:0 2px;line-height:16px}
+.flash{position:absolute;top:28%;left:50%;font-size:28px;font-weight:bold;color:#ff3b3b;text-shadow:0 0 5px #000,0 0 2px #000;animation:float .9s forwards;pointer-events:none;z-index:10}
+.flash.heal{color:#5f5}
+@keyframes float{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-34px)}}
+
+/* ---------- Colonnes des héros ---------- */
+.herocol{display:flex;flex-direction:column;align-items:center;gap:8px;width:170px;position:relative;z-index:1}
+.herocard{width:150px;height:180px;border-radius:6px;border:3px solid #8a6a3a;background:#241a0e center 15%/cover no-repeat;position:relative;cursor:pointer;box-shadow:0 6px 16px #000;display:flex;align-items:center;justify-content:center;font-size:60px}
+.herocard.p0{outline:2px solid #86c26a55}.herocard.p1{outline:2px solid #d8503a55}
+.herocard.active{border-color:var(--gold-l);box-shadow:0 0 22px #f3d58a88,0 6px 16px #000}
+.herocard.target{border-color:#ff4040;animation:pulse 1s infinite;box-shadow:0 0 22px #f44}
+.herohp{position:absolute;left:-10px;bottom:-10px;width:44px;height:44px;border-radius:50%;border:3px solid #2a0806;box-shadow:0 0 0 2px #d8a09a,0 3px 6px #000;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;color:#fff;text-shadow:0 0 3px #000}
+.power{width:160px;font-size:12px;padding:4px 6px;line-height:1.15}
+.power.ready{border-color:#ffe27a;box-shadow:0 0 10px #ffe27a88}
+.piles{display:flex;gap:10px}
+.pile{width:62px;height:82px;border-radius:5px;position:relative;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;color:#fff;text-shadow:0 0 4px #000}
+.pile.deck{background:radial-gradient(circle at 50% 45%,#ffb347,#c8401a 50%,#5a1006);border:2px solid var(--gold);box-shadow:3px 3px 0 #3a1a08,6px 6px 0 #26110a,0 6px 12px #000}
+.pile.deck::before{content:"⚔";position:absolute;top:6px;font-size:16px;color:#fff3d0aa}
+.pile.grave{background:#0006 center 20%/cover no-repeat;border:2px solid #6a6258;filter:grayscale(.8) brightness(.8)}
+.pile small{position:absolute;bottom:2px;font-size:10px;color:#ddd}
+.pile .cnt{background:#000a;border-radius:10px;padding:0 6px;font-size:14px}
+
+/* ---------- Bas d'écran ---------- */
+.bottom{display:flex;gap:12px;padding:0 12px 10px;align-items:flex-end;position:relative;z-index:3}
+.hand{flex:1;display:flex;align-items:flex-end;padding:0 0 4px 22px;min-width:0;height:100%;container-type:inline-size}
+/* Les cartes se chevauchent davantage quand la main est pleine, pour toujours tenir dans sa zone (--n : nombre de cartes) */
+.hand .card+.card{margin-left:min(-18px,calc((100cqw - 116px * var(--n)) / max(var(--n) - 1, 1)))}
+.card{width:116px;height:190px;flex:none;border-radius:7px;border:3px solid #6b5230;background:#1f160c;position:relative;margin-left:-18px;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:-4px 0 10px #000a;overflow:hidden}
+.card:first-child{margin-left:0}
+.card .cart{position:absolute;inset:0 0 34px 0;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
+.card .cbar{position:absolute;left:0;right:0;bottom:0;height:34px;background:linear-gradient(#3a2c1a,#15100a);border-top:2px solid #8a6a3a;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.card.spell{border-color:#4a6ab0}.card.spell .cbar{background:linear-gradient(#22305a,#0d1328);border-top-color:#6a8ad0}
+.card.fortune{border-color:#6a4aa0}.card.fortune .cbar{background:linear-gradient(#3a2256,#170c24);border-top-color:#9a7ad0}
+.cname{font-size:11px;font-weight:bold;color:#f5e6c8;text-align:center;line-height:1.05}
+/* Coût : gros chiffre blanc sur disque d'acier sombre cerclé d'argent */
+.cost{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:radial-gradient(circle at 50% 30%,#5a5a5a,#1a1a1a 60%,#0a0a0a);border:2px solid #d8dbe0;box-shadow:0 0 0 2px #1a1a1a,0 0 0 3px #8b9098,0 2px 5px #000;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;color:#fff;text-shadow:0 1px 2px #000;z-index:2}
+/* Conditions sous le coût, à gauche : c'est la partie visible quand les cartes se chevauchent */
+.creqs{position:absolute;top:22px;left:5px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:1;padding:4px 2px 7px;
+  background:linear-gradient(90deg,#1a1c20,#3a3e46 50%,#1a1c20);clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),50% 100%,0 calc(100% - 8px));box-shadow:inset 0 0 0 1px #000}
+.creqs:empty{display:none}
+.creqs .sb{width:15px;height:15px;font-size:9px}
+/* Condition non remplie : même couleur assombrie (pour reconnaître Puissance, Magie ou Destinée) et contour rouge */
+.creqs .sb.miss{filter:brightness(.6);outline:2px solid #f44;outline-offset:-1px}
+.card .ust{bottom:38px}
+/* Attaque, riposte et PV des cartes : 20 % plus petits que sur le plateau */
+.card .b{width:18px;height:18px;font-size:11px}
+.card .b.ret{width:16px;height:16px;font-size:10px}
+.card .b.hp{width:19px;height:19px;font-size:11px}
+.card:hover{transform:translateY(-22px) scale(1.06);z-index:10}
+.card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
+.card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-28px) scale(1.06);z-index:11}
+.info{width:370px;height:190px;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;flex:none;box-shadow:0 0 18px #000}
+.ihead{background:linear-gradient(#4a3a22,#241a0c);border-bottom:1px solid var(--gold);padding:5px 8px;font-size:12px;color:var(--gold-l);text-align:center;min-height:30px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+.ihead button{padding:2px 7px;font-size:11px}
+.ibody{flex:1;display:flex;gap:8px;padding:7px;min-height:0}
+.iart{width:92px;flex:none;border-radius:4px;border:2px solid #6b5230;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
+.itext{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;overflow:hidden}
+.iname{font-weight:bold;color:#f5e6c8;font-size:14px}
+.itype{color:#c9b18a;font-size:11px}
+.ireqs{display:flex;gap:4px;align-items:center}
+.ireqs .sb{width:22px;height:22px;font-size:12px}
+.idesc{color:#e8dcc0;line-height:1.25;overflow-y:auto}
+.istats{margin-top:auto;font-weight:bold;font-size:13px;display:flex;gap:10px}
+.istats .atk{color:#ffcf80}.istats .ret{color:#8fd0ff}.istats .hpv{color:#ff7070}
+.ihint{color:#9c8c70;font-style:italic;font-size:12px;margin:auto;text-align:center}
+.log{width:300px;height:190px;overflow-y:auto;background:#000a;border:1px solid #5a4a30;border-radius:6px;padding:6px 8px;font-size:12px;flex:none}
+.log div{padding:1px 0}
+.log .turn{color:#f0c040;font-weight:bold;margin-top:3px}
+.log .dmg{color:#ff9a9a}
+.log .p0{color:#b8e0a0}.log .p1{color:#ffaaaa}
+
+/* ---------- Menu & fin de partie ---------- */
+.overlay{position:fixed;inset:0;background:#000000cc;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:50}
+.overlay h1{font-size:56px;color:#f0c040;margin:0}
+.menu{max-width:1060px;margin:0 auto;padding:24px;text-align:center;height:100vh;overflow-y:auto}
+.menu h1{font-size:46px;color:#f0c040;margin:6px 0;text-shadow:0 0 18px #e2541c}
+.facs{display:flex;gap:18px;justify-content:center;margin:20px 0;flex-wrap:wrap}
+.fac{width:300px;height:360px;border:3px solid #6b5230;border-radius:10px;background:#1a120a center 15%/cover no-repeat;cursor:pointer;position:relative;overflow:hidden;transition:transform .15s;box-shadow:0 8px 20px #000}
+.fac:hover{border-color:var(--gold-l);transform:translateY(-6px)}
+.fac .ftxt{position:absolute;left:0;right:0;bottom:0;padding:12px;background:linear-gradient(transparent,#000e 30%);text-align:left;font-size:13px}
+.fac h2{margin:0 0 4px;color:var(--gold-l)}
+.rules{text-align:left;background:#00000077;padding:14px 22px;border-radius:10px;font-size:14px;line-height:1.5;border:1px solid #4a3a26}
+
+/* ---------- Ajouts client React ---------- */
+.modes{display:inline-flex;gap:0;margin-top:16px;border:1px solid var(--gold);border-radius:8px;overflow:hidden}
+.modes button{border:none;border-radius:0;padding:8px 18px;font-size:14px;background:#1a140c}
+.modes button.on{background:linear-gradient(#8a6a3a,#4a3418);color:#fff3d0}
+.menu .error{color:#ff9a9a;margin-top:12px}
+.overlay p{color:#e8dcc0;font-size:18px;margin:0}
+.overlay .spinner{width:48px;height:48px;border-radius:50%;border:4px solid #5a4a30;border-top-color:var(--gold-l);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Carte jouée, révélée avant sa résolution ---------- */
+.reveal{position:fixed;inset:78px 0 206px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:40}
+.reveal .who{background:#000c;border:1px solid var(--gold);border-radius:6px;padding:4px 12px;color:var(--gold-l);font-size:14px}
+.reveal .card{width:220px;height:314px;margin:0;cursor:default;animation:reveal .25s ease-out;box-shadow:0 0 30px #000,0 0 24px #f3d58a66}
+.reveal .card:hover{transform:none}
+.reveal .card .cart{inset:0 0 110px 0}
+.reveal .card .cbar{height:110px;flex-direction:column;justify-content:flex-start;gap:4px;padding:6px 8px}
+.reveal .card .cname{font-size:15px}
+.reveal .card .ctext{font-size:12px;color:#e8dcc0;text-align:center;line-height:1.2}
+.reveal .card .ust{bottom:116px}
+.reveal.p1 .card{box-shadow:0 0 30px #000,0 0 24px #d8503a88}
+.reveal .card.power{border-color:var(--gold-l);box-shadow:0 0 30px #000,0 0 34px #f3d58acc}
+.reveal .card.power .cart{background-position:center 15%}
+@keyframes reveal{from{opacity:0;transform:scale(.6) translateY(40px)}to{opacity:1;transform:none}}
+
+/* ---------- Ronds de vie remplis selon les PV restants (--hp de 0 à 1) ---------- */
+.b.hp,.herohp{--hp:1;background:
+  radial-gradient(circle at 35% 28%,#ffffff55,transparent 45%),
+  linear-gradient(to top,#8e160c 0,#e24a3a calc(var(--hp) * 100%),#1c0806 calc(var(--hp) * 100%),#2e0f0b 100%)}
+
+/* États d'une créature : pile, poison, enchantements */
+.ustate{position:absolute;top:2px;right:2px;display:flex;gap:2px;font-size:11px;line-height:16px}
+.ustate b{background:#000b;border-radius:4px;padding:0 3px;color:#f0e0b0}
+.ustate b.poison{color:#9f6}
+.istatus{margin-top:4px;color:#e8d8a8}
+.card.target{border-color:#ff5050;box-shadow:0 0 14px #f44;animation:pulse 1s infinite}
+
+/* Fenêtre de choix (mode, carte de la bibliothèque ou du cimetière) */
+.chooser{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:40}
+.chooser-box{background:#241a0e;border:2px solid var(--gold-l, #d8b060);border-radius:10px;padding:18px 22px;max-width:min(92vw,760px);display:flex;flex-direction:column;gap:14px;align-items:center}
+.chooser-title{color:#f0e0b0;font-size:17px;text-align:center}
+.chooser-options{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.chooser-options button{background:#3a2a16;color:#f0e0b0;border:1px solid #8a6a3a;border-radius:6px;cursor:pointer;font:inherit}
+.chooser-options button:hover{border-color:#ff0;box-shadow:0 0 10px #ff0a}
+.choice-mode{padding:10px 16px}
+.choice-card{width:110px;padding:4px;display:flex;flex-direction:column;gap:4px;align-items:center}
+.choice-card .cart{width:100%;height:120px;border-radius:4px;background:#1a120a center/cover no-repeat;display:flex;align-items:center;justify-content:center}
+.choice-card span{font-size:12px;text-align:center}
+.chooser-cancel{background:none;border:1px solid #8a6a3a;color:#c8b890;border-radius:6px;padding:6px 14px;cursor:pointer}
+
+/* Bandeau de changement de tour */
+.turn-banner{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:45;overflow:hidden}
+.turn-banner-band{width:100%;padding:16px 0;text-align:center;background:linear-gradient(90deg,transparent,#000d 18%,#000d 82%,transparent);border-block:2px solid var(--gold);animation:turn-banner 1.6s ease-in-out forwards}
+.turn-banner.p0 .turn-banner-band{--turn-glow:#86c26a}
+.turn-banner.p1 .turn-banner-band{--turn-glow:#d8503a;animation-name:turn-banner-l}
+.turn-banner-title{font-size:46px;font-weight:bold;text-transform:uppercase;letter-spacing:4px;color:var(--gold-l);text-shadow:0 0 18px var(--turn-glow),0 2px 4px #000}
+.turn-banner-sub{margin-top:4px;font-size:15px;color:#e8dcc0}
+@keyframes turn-banner{0%{opacity:0;transform:translateX(-60%) scaleY(.4)}18%{opacity:1;transform:none}78%{opacity:1;transform:none}100%{opacity:0;transform:translateX(60%) scaleY(.4)}}
+@keyframes turn-banner-l{0%{opacity:0;transform:translateX(60%) scaleY(.4)}18%{opacity:1;transform:none}78%{opacity:1;transform:none}100%{opacity:0;transform:translateX(-60%) scaleY(.4)}}
+@media (prefers-reduced-motion:reduce){.turn-banner-band{animation:none}}
+
+/* Consultation d'un cimetière */
+.pile.grave{cursor:pointer}
+.pile.grave:hover{filter:none;border-color:var(--gold-l)}
+.grave-viewer{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;z-index:42}
+.grave-box{background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:10px;padding:14px 18px;width:min(94vw,1040px);max-height:86vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 30px #000}
+.grave-head{display:flex;justify-content:space-between;align-items:center;color:var(--gold-l);font-size:17px;font-weight:bold}
+.grave-head button{background:none;border:1px solid #8a6a3a;color:#c8b890;border-radius:6px;padding:4px 12px;cursor:pointer;font:inherit;font-size:13px;font-weight:normal}
+.grave-empty{color:#9c8c70;font-style:italic;text-align:center;padding:30px 0}
+.grave-body{display:flex;gap:16px;min-height:0}
+.grave-cards{flex:1;display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start;overflow-y:auto;padding:26px 4px 4px;min-height:0}
+.grave-cards .card{margin:0;cursor:default}
+.grave-cards .card:hover{transform:translateY(-6px)}
+.grave-cards .card.sel{transform:translateY(-6px);z-index:1}
+.grave-details{width:340px;flex:none;display:flex;gap:8px;background:#0006;border:1px solid #5a4a30;border-radius:8px;padding:8px;align-self:flex-start}
+.grave-details .iart{height:150px}
