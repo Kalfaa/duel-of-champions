@@ -4,8 +4,10 @@ import type { FlashMap } from '../game/flashes';
 import type { Ghost } from '../game/ghosts';
 import type { Lunge } from '../hooks/useGame';
 import { slotKey, type Click, type Highlights, type Selection } from '../game/selection';
+import type { Inspect } from './CardInspector';
 import type { Hover } from './InfoPanel';
-import { ArtFallback, artStyle, ATTACK, cls, FlashMark, keywordIcons, StatBadges } from './common';
+import { ArtFallback, artStyle, ATTACK, cls, FlashMark, keywordIcons, onRightClick, StatBadges } from './common';
+import { EventRow } from './EventRow';
 import { HeroColumn } from './HeroColumn';
 
 const ROWS = [0, 1] as const;
@@ -20,11 +22,12 @@ interface Props {
   ghosts: readonly Ghost[];
   onClick(click: Click): void;
   onHover(hover: Hover): void;
+  onInspect(target: Inspect): void;
   onOpenGrave(player: PlayerIndex): void;
 }
 
 /** Le joueur est toujours affiché à gauche (classe p0), l'adversaire à droite (p1). */
-export function Battlefield({ view, selection, highlights, flashes, attacking, ghosts, onClick, onHover, onOpenGrave }: Props) {
+export function Battlefield({ view, selection, highlights, flashes, attacking, ghosts, onClick, onHover, onInspect, onOpenGrave }: Props) {
   const opponent: PlayerIndex = view.you === 0 ? 1 : 0;
   const sideOf = (player: PlayerIndex) => (player === view.you ? 'p0' : 'p1');
 
@@ -49,6 +52,7 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
           player === view.current && u.exhausted && 'moved')}
         style={artStyle(u.card.art)}
         onMouseEnter={dying ? undefined : () => onHover({ kind: 'unit', uid: u.uid })}
+        onContextMenu={dying ? undefined : onRightClick(() => onInspect({ kind: 'unit', uid: u.uid }))}
       >
         <ArtFallback art={u.card.art} icon={u.card.icon} />
         <span className="utag" title={ATTACK[at].name}>{ATTACK[at].icon}</span>
@@ -84,7 +88,9 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
     <div className="field">
       <div className="half l" style={{ backgroundImage: `url('/img/bg/${view.players[view.you].faction}.webp')` }} />
       <div className="half r" style={{ backgroundImage: `url('/img/bg/${view.players[opponent].faction}.webp')` }} />
-      <HeroColumn view={view} player={view.you} side="p0" highlights={highlights} flashes={flashes} onClick={onClick} onHover={onHover} onOpenGrave={onOpenGrave} />
+      <HeroColumn view={view} player={view.you} side="p0" highlights={highlights} flashes={flashes} onClick={onClick} onHover={onHover} onInspect={onInspect} onOpenGrave={onOpenGrave} />
+      {/* Comme dans le jeu original, les deux événements sont posés sous le champ de bataille */}
+      <div className="board">
       <div className="grid">
         {LANES.map(lane => (
           <Fragment key={lane}>
@@ -96,7 +102,9 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
           </Fragment>
         ))}
       </div>
-      <HeroColumn view={view} player={opponent} side="p1" highlights={highlights} flashes={flashes} onClick={onClick} onHover={onHover} onOpenGrave={onOpenGrave} />
+      <EventRow view={view} selection={selection} onClick={onClick} onHover={onHover} onInspect={onInspect} />
+      </div>
+      <HeroColumn view={view} player={opponent} side="p1" highlights={highlights} flashes={flashes} onClick={onClick} onHover={onHover} onInspect={onInspect} onOpenGrave={onOpenGrave} />
     </div>
   );
 }

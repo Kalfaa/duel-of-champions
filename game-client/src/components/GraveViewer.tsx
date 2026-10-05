@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { CardView, GameView, PlayerIndex } from '../api/protocol';
-import { CardFace, cls } from './common';
+import type { Inspect } from './CardInspector';
+import { CardFace, cls, onRightClick } from './common';
 import { CardDetails } from './InfoPanel';
 
 interface Props {
   view: GameView;
   player: PlayerIndex;
   onClose(): void;
+  onInspect(target: Inspect): void;
 }
 
 /** Contenu d'un cimetière, de la carte la plus récente à la plus ancienne ; survoler une carte affiche ses détails. */
-export function GraveViewer({ view, player, onClose }: Props) {
+export function GraveViewer({ view, player, onClose, onInspect }: Props) {
   const p = view.players[player];
   const cards = [...p.grave].reverse();
   const [hovered, setHovered] = useState<CardView | null>(null);
@@ -30,7 +32,7 @@ export function GraveViewer({ view, player, onClose }: Props) {
             <div className="grave-body">
               <div className="grave-cards">
                 {cards.map((c, i) => (
-                  <div key={i} className={cls('card', c.type, shown === c && 'sel')} onMouseEnter={() => setHovered(c)}>
+                  <div key={i} className={cls('card', c.type, shown === c && 'sel')} onMouseEnter={() => setHovered(c)} onContextMenu={onRightClick(() => onInspect({ kind: 'card', card: c }))}>
                     <CardFace card={c} />
                   </div>
                 ))}

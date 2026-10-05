@@ -78,6 +78,8 @@ export type GameAction =
   | { type: 'develop'; choice: DevelopChoice }
   | { type: 'play'; handIndex: number; choices: Choice[] }
   | { type: 'power'; choices: Choice[] }
+  /** Utiliser l'un des deux événements en jeu (0 = celui de gauche, qui part en fin de tour). */
+  | { type: 'event'; slot: number; choices: Choice[] }
   | { type: 'attack'; uid: number; target: Target }
   | { type: 'move'; uid: number; to: SlotRef }
   | { type: 'endTurn' };

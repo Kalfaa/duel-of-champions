@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
 import type { AttackType, CardView, Keywords, PlayerView, StatKey } from '../api/protocol';
 import type { Flash } from '../game/flashes';
 
@@ -9,7 +9,28 @@ export const ATTACK: Record<AttackType, { icon: string; name: string }> = {
   flyer: { icon: '🪽', name: 'Volant' },
 };
 
+/** Icône de chaque école de magie ; une école inconnue garde une icône générique. */
+const SCHOOL_ICONS: Readonly<Record<string, string>> = { 'Lumière': '☀️', 'Ténèbres': '🌙', 'Feu': '🔥' };
+export const schoolIcon = (school: string): string => SCHOOL_ICONS[school] ?? '✨';
+
+/** Pastilles des écoles de magie d'un héros. */
+export function SchoolBadges({ schools }: { schools: readonly string[] }) {
+  if (!schools.length) return null;
+  return (
+    <div className="schools">
+      {schools.map(s => <span key={s} className="school" title={`Magie : ${s}`}>{schoolIcon(s)}</span>)}
+    </div>
+  );
+}
+
 export const cls = (...names: (string | false | null | undefined)[]): string => names.filter(Boolean).join(' ');
+
+/** Gestionnaire de clic droit : remplace le menu contextuel et l'annulation de la sélection (écoutée sur le document). */
+export const onRightClick = (fn: () => void) => (e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+  fn();
+};
 
 export const artStyle = (art: string | null | undefined): CSSProperties | undefined =>
   art ? { backgroundImage: `url('/img/art/${art}.webp')` } : undefined;
@@ -91,11 +112,11 @@ export function ArtFallback({ art, icon }: { art: string | null | undefined; ico
 }
 
 /** Face d'une carte en petit (main, cimetière) : illustration, coût, conditions, caractéristiques et nom. */
-export function CardFace({ card, player }: { card: CardView; player?: PlayerView }) {
+export function CardFace({ card, player, cost = card.cost }: { card: CardView; player?: PlayerView; cost?: number }) {
   return (
     <>
       <div className="cart" style={artStyle(card.art)}><ArtFallback art={card.art} icon={card.icon} /></div>
-      <div className="cost">{card.cost}</div>
+      <div className={cls('cost', cost > card.cost && 'up')} title={cost > card.cost ? `Coût augmenté par un événement (${card.cost} de base)` : undefined}>{cost}</div>
       <div className="creqs"><ReqBadges req={card.req} player={player} /></div>
       {card.type === 'creature' && <StatBadges atk={card.atk ?? 0} ret={card.ret ?? 0} hp={card.hp ?? 0} />}
       <div className="cbar"><div className="cname">{card.name}</div></div>

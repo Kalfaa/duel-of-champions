@@ -1,15 +1,17 @@
 import type { GameView } from '../api/protocol';
 import { currentStep, type Click, type Selection } from '../game/selection';
-import { ArtFallback, artStyle } from './common';
+import type { Inspect } from './CardInspector';
+import { ArtFallback, artStyle, onRightClick } from './common';
 
 interface Props {
   view: GameView;
   selection: Selection;
   onClick(click: Click): void;
+  onInspect(target: Inspect): void;
 }
 
 /** Fenêtre de choix pour les étapes qui ne se désignent pas sur le plateau : option « au choix » ou carte d'une pile. */
-export function Chooser({ view, selection, onClick }: Props) {
+export function Chooser({ view, selection, onClick, onInspect }: Props) {
   const step = currentStep(view, selection);
   if (!step || !step.options.length || !step.options.every(o => o.kind === 'mode' || o.kind === 'card')) return null;
   return (
@@ -21,7 +23,8 @@ export function Chooser({ view, selection, onClick }: Props) {
             const card = step.cards?.[i];
             const label = choice.kind === 'mode' ? step.labels?.[choice.index] ?? `Option ${choice.index + 1}` : card?.name ?? '?';
             return (
-              <button key={i} className={card ? 'choice-card' : 'choice-mode'} onClick={() => onClick({ kind: 'choose', choice })}>
+              <button key={i} className={card ? 'choice-card' : 'choice-mode'} onClick={() => onClick({ kind: 'choose', choice })}
+                onContextMenu={card ? onRightClick(() => onInspect({ kind: 'card', card })) : undefined}>
                 {card && <div className="cart" style={artStyle(card.art)}><ArtFallback art={card.art} icon={card.icon} /></div>}
                 <span>{label}</span>
               </button>

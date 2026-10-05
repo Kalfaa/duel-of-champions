@@ -1,6 +1,6 @@
 *{box-sizing:border-box}
-:root{--gold:#c9a45a;--gold-l:#f3d58a;--sh:clamp(78px,calc((100vh - 318px) / 4),150px);--sw:calc(var(--sh) * .9)}
-body{margin:0;background:#0a0908;color:#eee;font-family:Georgia,"Times New Roman",serif;min-height:100vh;user-select:none;overflow:hidden}
+:root{--gold:#c9a45a;--gold-l:#f3d58a;--sh:clamp(70px,calc((100vh - 330px) / 4.65),150px);--sw:calc(var(--sh) * .9)}
+body{margin:0;background:#0a0908;color:#eee;font-family:Georgia,"Times New Roman",serif;min-height:100vh;user-select:none;overflow:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 button{font-family:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--gold);background:linear-gradient(#5a4128,#2a1c0c);color:#f5e6c8;padding:5px 10px;font-size:13px}
 button:hover:not(:disabled){filter:brightness(1.3)}
 button:disabled{opacity:.4;cursor:default}
@@ -25,10 +25,6 @@ button:disabled{opacity:.4;cursor:default}
 .sb.m{background:linear-gradient(135deg,#e4e8ee 0,#8a929e 35%,#4a525e 70%,#2a3038);border-radius:5px 5px 50% 50%/5px 5px 60% 60%;border:2px solid #1c2026;box-shadow:inset 0 1px 0 #fff8,0 1px 3px #000}
 .sb.g{background:radial-gradient(circle at 34% 28%,#fff 0,#bfe6ff 12%,#3c9ae6 38%,#0e4a9a 70%,#06214a);border-radius:50%;border:2px solid #0a1a36;box-shadow:inset 0 -2px 4px #0008,0 0 5px #3c9ae6aa}
 .sb.d{background:radial-gradient(circle at 35% 28%,#f4e6ff 0,#c08cff 22%,#7a36d8 55%,#3a0e7a);border-radius:6px;border:2px solid #1c0c3a;box-shadow:inset 0 -2px 4px #0008,0 0 5px #9a6ad8aa}
-.sb.dev{cursor:pointer;animation:glow 1s infinite;box-shadow:0 0 12px #ffe27a}
-@keyframes glow{50%{box-shadow:0 0 3px #ffe27a}}
-.sb .plus{position:absolute;top:-8px;right:-8px;font-size:11px;background:#2a6a2a;border-radius:50%;width:15px;height:15px;display:flex;align-items:center;justify-content:center;border:1px solid #8f8}
-.drawbtn{padding:3px 7px;font-size:11px}
 .resc{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 50% 30%,#5a5a5a,#1a1a1a 60%,#0a0a0a);border:3px solid #d8dbe0;box-shadow:0 0 0 3px #1a1a1a,0 0 0 5px #8b9098,0 3px 8px #000;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none}
 .resc b{font-size:24px;color:#fff}.resc small{font-size:12px;color:#6cc8ff;font-weight:bold}
 .endturn{width:104px;height:104px;margin:14px -8px -40px;border-radius:50%;border:5px solid var(--gold);background:radial-gradient(circle at 50% 40%,#ffb347,#e2541c 45%,#7a1a06);color:#fff3d0;font-size:15px;font-weight:bold;text-transform:uppercase;text-shadow:0 1px 3px #000;box-shadow:0 0 0 3px #3a2a12,0 6px 18px #000,0 0 22px #ff7a2a88;z-index:5;line-height:1.1;padding:0}
@@ -88,9 +84,31 @@ button:disabled{opacity:.4;cursor:default}
 .herocard.p0{outline:2px solid #86c26a55}.herocard.p1{outline:2px solid #d8503a55}
 .herocard.active{border-color:var(--gold-l);box-shadow:0 0 22px #f3d58a88,0 6px 16px #000}
 .herocard.target{border-color:#ff4040;animation:pulse 1s infinite;box-shadow:0 0 22px #f44}
+/* Écoles de magie du héros : pastilles en haut à droite de son portrait */
+.schools{position:absolute;top:4px;right:4px;display:flex;flex-direction:column;gap:3px;z-index:1}
+.school{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;background:radial-gradient(circle at 50% 35%,#3a3e46,#121418 70%);border:2px solid var(--gold);box-shadow:0 0 0 1px #000,0 2px 4px #000}
+.icard .schools{top:62px;right:14px;gap:6px}
+.icard .school{width:44px;height:44px;font-size:24px;border-width:3px}
 .herohp{position:absolute;left:-10px;bottom:-10px;width:44px;height:44px;border-radius:50%;border:3px solid #2a0806;box-shadow:0 0 0 2px #d8a09a,0 3px 6px #000;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;color:#fff;text-shadow:0 0 3px #000}
-.power{width:160px;font-size:12px;padding:4px 6px;line-height:1.15}
-.power.ready{border-color:#ffe27a;box-shadow:0 0 10px #ffe27a88}
+.herocol .power{width:160px;font-size:12px;padding:4px 6px;line-height:1.15;text-align:center;border-radius:6px;border:1px solid #7a6238;background:linear-gradient(#3a2c1a,#15100a);color:#d8c8a8}
+/* Héros qui peut encore agir ce tour-ci : surligné en vert, un clic dessus ouvre ses actions */
+.herocard.ready:not(.target){border-color:#7fff7f;animation:ready-glow 1s infinite;box-shadow:0 0 18px #5f5}
+@keyframes ready-glow{50%{box-shadow:0 0 5px #5f5}}
+.hero-choice{display:inline-flex;align-items:center;gap:6px}
+/* Fenêtre des actions du héros : portrait à gauche, choix à droite */
+.chooser-box.hero-menu{flex-direction:row;align-items:stretch;gap:18px}
+.hero-menu-portrait{position:relative;width:200px;flex:none;aspect-ratio:.75;align-self:center;border-radius:8px;border:3px solid var(--gold-l);background:#241a0e center 15%/cover no-repeat;box-shadow:0 0 18px #f3d58a66,0 6px 16px #000;display:flex;align-items:center;justify-content:center;font-size:70px}
+.hero-menu-side{display:flex;flex-direction:column;gap:10px;min-width:0;justify-content:center}
+.hero-menu-side .chooser-title{text-align:left}
+.hero-menu-options{display:flex;flex-direction:column;gap:8px}
+.hero-menu-options button{background:#3a2a16;color:#f0e0b0;border:1px solid #8a6a3a;border-radius:6px;font:inherit;text-align:left}
+.hero-menu-options button:hover:not(:disabled){border-color:#ff0;box-shadow:0 0 10px #ff0a}
+.hero-menu-options button:disabled{opacity:.4;cursor:default}
+.hero-menu-side .hero-power-text{text-align:left}
+.hero-menu-side .chooser-cancel{align-self:flex-start}
+.hero-choice .sb{width:22px;height:22px;font-size:12px}
+.chooser-options button:disabled{opacity:.4;cursor:default;box-shadow:none;border-color:#8a6a3a}
+.hero-power-text{max-width:460px;font-size:13px;color:#e8dcc0;text-align:center;line-height:1.3}
 .piles{display:flex;gap:10px}
 .pile{width:62px;height:82px;border-radius:5px;position:relative;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;color:#fff;text-shadow:0 0 4px #000}
 .pile.deck{background:radial-gradient(circle at 50% 45%,#ffb347,#c8401a 50%,#5a1006);border:2px solid var(--gold);box-shadow:3px 3px 0 #3a1a08,6px 6px 0 #26110a,0 6px 12px #000}
@@ -101,9 +119,9 @@ button:disabled{opacity:.4;cursor:default}
 
 /* ---------- Bas d'écran ---------- */
 .bottom{display:flex;gap:12px;padding:0 12px 10px;align-items:flex-end;position:relative;z-index:3}
-.hand{flex:1;display:flex;align-items:flex-end;padding:0 0 4px 22px;min-width:0;height:100%;container-type:inline-size}
+.hand{--cw:116px;flex:1;display:flex;align-items:flex-end;padding:0 0 4px 22px;min-width:0;height:100%;container-type:inline-size}
 /* Les cartes se chevauchent davantage quand la main est pleine, pour toujours tenir dans sa zone (--n : nombre de cartes) */
-.hand .card+.card{margin-left:min(-18px,calc((100cqw - 116px * var(--n)) / max(var(--n) - 1, 1)))}
+.hand .card+.card{margin-left:min(-18px,calc((100cqw - var(--cw) * var(--n)) / max(var(--n) - 1, 1)))}
 .card{width:116px;height:190px;flex:none;border-radius:7px;border:3px solid #6b5230;background:#1f160c;position:relative;margin-left:-18px;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:-4px 0 10px #000a;overflow:hidden}
 .card:first-child{margin-left:0}
 .card .cart{position:absolute;inset:0 0 34px 0;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
@@ -128,10 +146,10 @@ button:disabled{opacity:.4;cursor:default}
 .card:hover{transform:translateY(-22px) scale(1.06);z-index:10}
 .card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
 .card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-28px) scale(1.06);z-index:11}
-.info{width:370px;height:190px;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;flex:none;box-shadow:0 0 18px #000}
-.ihead{background:linear-gradient(#4a3a22,#241a0c);border-bottom:1px solid var(--gold);padding:5px 8px;font-size:12px;color:var(--gold-l);text-align:center;min-height:30px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+.info{width:370px;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;flex:none;box-shadow:0 0 18px #000}
+.ihead{position:relative;background:linear-gradient(#4a3a22,#241a0c);padding:5px 30px;font-size:12px;color:var(--gold-l);text-align:center;min-height:30px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
 .ihead button{padding:2px 7px;font-size:11px}
-.ibody{flex:1;display:flex;gap:8px;padding:7px;min-height:0}
+.izoom{position:absolute;top:50%;right:4px;transform:translateY(-50%);padding:1px 5px;font-size:13px;line-height:1.2}
 .iart{width:92px;flex:none;border-radius:4px;border:2px solid #6b5230;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
 .itext{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;overflow:hidden}
 .iname{font-weight:bold;color:#f5e6c8;font-size:14px}
@@ -141,7 +159,6 @@ button:disabled{opacity:.4;cursor:default}
 .idesc{color:#e8dcc0;line-height:1.25;overflow-y:auto}
 .istats{margin-top:auto;font-weight:bold;font-size:13px;display:flex;gap:10px}
 .istats .atk{color:#ffcf80}.istats .ret{color:#8fd0ff}.istats .hpv{color:#ff7070}
-.ihint{color:#9c8c70;font-style:italic;font-size:12px;margin:auto;text-align:center}
 .log{width:300px;height:190px;overflow-y:auto;background:#000a;border:1px solid #5a4a30;border-radius:6px;padding:6px 8px;font-size:12px;flex:none}
 .log div{padding:1px 0}
 .log .turn{color:#f0c040;font-weight:bold;margin-top:3px}
@@ -235,3 +252,168 @@ button:disabled{opacity:.4;cursor:default}
 .grave-cards .card.sel{transform:translateY(-6px);z-index:1}
 .grave-details{width:340px;flex:none;display:flex;gap:8px;background:#0006;border:1px solid #5a4a30;border-radius:8px;padding:8px;align-self:flex-start}
 .grave-details .iart{height:150px}
+
+/* ---------- Inspection d'une carte (clic droit) : carte en grand avec tout son texte ---------- */
+.inspect{position:fixed;inset:0;background:#000c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:60;cursor:pointer}
+.inspect-hint{color:#9c8c70;font-size:12px;font-style:italic}
+.icard{--frame:#a8743a;position:relative;height:min(86vh,640px,calc(94vw / .68));aspect-ratio:.68;border-radius:14px;border:7px solid var(--frame);background:#1a120a;box-shadow:0 0 0 2px #000,0 0 40px #000,0 0 30px color-mix(in srgb,var(--frame) 55%,transparent);overflow:hidden;animation:reveal .2s ease-out;cursor:default}
+.icard.spell{--frame:#4a6ab0}.icard.fortune{--frame:#7a5ab8}.icard.hero{--frame:var(--gold)}
+.icard-art{position:absolute;inset:0;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center}
+.icard-art .emoji{font-size:140px}
+.icard-name{position:absolute;top:0;left:0;right:0;height:52px;padding:0 16px 0 92px;display:flex;align-items:center;justify-content:center;text-align:center;background:linear-gradient(#3a3228,#120e0a);border-bottom:2px solid #7a6238;color:#9fe07a;font-size:20px;font-weight:bold;text-shadow:0 1px 3px #000;line-height:1.1}
+.icard.hero .icard-name{padding-left:16px;color:var(--gold-l)}
+.icard-cost{position:absolute;top:6px;left:8px;width:70px;height:70px;border-radius:50%;background:radial-gradient(circle at 50% 30%,#5a5a5a,#1a1a1a 60%,#0a0a0a);border:3px solid #d8dbe0;box-shadow:0 0 0 3px #1a1a1a,0 0 0 5px #8b9098,0 3px 8px #000;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:38px;color:#fff;text-shadow:0 1px 3px #000;z-index:2}
+.icard-reqs{position:absolute;top:84px;left:20px;display:flex;flex-direction:column;gap:6px;z-index:1}
+.icard-reqs .sb{width:44px;height:44px;font-size:22px}
+.icard-reqs .sb.miss{filter:brightness(.6);outline:3px solid #f44;outline-offset:-1px}
+/* Attaque, riposte et PV en grand, en colonne à gauche de l'encadré de texte */
+.icard .ust{left:10px;bottom:16px;gap:10px;align-items:center;z-index:2}
+.icard .b{width:54px;height:54px;font-size:30px;border-width:3px}
+.icard .b.ret{width:48px;height:48px;font-size:26px}
+.icard .b.hp{width:58px;height:58px;font-size:30px}
+.icard-box{position:absolute;left:80px;right:14px;bottom:14px;min-height:34%;max-height:48%;display:flex;flex-direction:column;background:#0d0b09e8;border:2px solid #5a4a30;border-radius:6px;box-shadow:0 0 0 1px #000,0 4px 14px #000}
+.icard.spell .icard-box,.icard.fortune .icard-box{left:14px}
+.icard-type{padding:7px 10px;text-align:center;font-weight:bold;font-size:16px;color:#f5e6c8;border-bottom:1px solid #5a4a30}
+.icard-text{padding:8px 12px;font-size:14px;line-height:1.35;color:#e8dcc0;overflow-y:auto}
+.icard-text p{margin:0 0 6px}
+.icard-text b{color:#f5e6c8}
+.icard-none{color:#9c8c70;font-style:italic}
+.icard-status{color:#e8d8a8}
+/* Caractéristiques de départ du héros, sur une bannière sous le nom */
+.icard-base{top:52px;left:14px;padding:12px 7px 22px;background:linear-gradient(90deg,#1a1c20,#3a3e46 50%,#1a1c20);border:1px solid #000;clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),50% 100%,0 calc(100% - 14px))}
+.icard-base:empty{display:none}
+
+/* ---------- Mobile (portrait) : héros au-dessus du plateau, main et infos en dessous ---------- */
+@media (max-width:900px){
+  body{overflow:auto}
+  .game{min-width:0;height:auto;min-height:100dvh;grid-template-rows:auto 1fr auto;
+    /* Cases du plateau : limitées par la largeur de l'écran et par la hauteur laissée par le reste de l'interface */
+    --sh:max(40px,min(calc((100vw - 168px) / 4 / .9),calc((100dvh - 336px) / 4.75),130px));--sw:calc(var(--sh) * .9)}
+
+  /* Barre supérieure compacte */
+  .topbar{padding:4px 4px 4px 36px;gap:4px}
+  .menubtn{left:4px;top:50%;transform:translateY(-50%);padding:2px 6px;font-size:14px}
+  .tb-side{flex:1;width:auto;min-width:0;height:52px;padding:0 6px;gap:6px}
+  .tb-side.p0{border-radius:8px}.tb-side.p1{border-radius:8px}
+  .banner,.psub{display:none}
+  .pname{font-size:11px;max-width:100%;padding:1px 5px}
+  .statrow{gap:4px}
+  .sb{width:22px;height:22px;font-size:12px}
+  .resc{width:36px;height:36px;border-width:2px;box-shadow:0 0 0 2px #1a1a1a,0 0 0 3px #8b9098}
+  .resc b{font-size:16px}.resc small{font-size:9px}
+  .endturn{width:62px;height:62px;margin:0;border-width:3px;font-size:10px}
+  .endturn small{font-size:8px}
+
+  /* Champ de bataille : les héros restent de part et d'autre de la grille, en colonnes étroites */
+  .field{gap:4px;padding:6px 4px 4px}
+  .grid{grid-template-columns:repeat(2,var(--sw)) 24px repeat(2,var(--sw));gap:4px}
+  .lane::before{width:20px;height:20px}
+  .herocol{width:54px;flex:none;gap:6px}
+  .herocard{width:54px;height:66px;flex:none;font-size:28px;border-width:2px}
+  .herocard .school{width:18px;height:18px;font-size:10px;border-width:1px}
+  .herocard .schools{top:2px;right:2px}
+  .herohp{width:26px;height:26px;left:-5px;bottom:-5px;font-size:13px;border-width:2px}
+  /* Le pouvoir reste consultable dans les actions du héros et sur sa carte en grand */
+  .herocol .power{display:none}
+  .piles{gap:4px}
+  .pile{width:25px;height:30px;font-size:12px}
+  .pile small,.pile.deck::before{display:none}
+  .pile.deck{box-shadow:2px 2px 0 #3a1a08,0 3px 6px #000}
+  .pile .cnt{font-size:10px;padding:0 3px}
+
+  /* Créatures du plateau en petit */
+  .unit{inset:2px;border-width:1px}
+  .unit .emoji{font-size:24px}
+  .unit .b{width:16px;height:16px;font-size:10px;border-width:1px}
+  .unit .b.ret{width:15px;height:15px;font-size:9px}
+  .unit .b.hp{width:17px;height:17px;font-size:10px}
+  .ust{left:1px;bottom:1px;gap:1px}
+  .utag,.ukw,.ustate{font-size:9px;line-height:12px}
+  .flash{font-size:20px}
+
+  /* Bas d'écran : infos puis main, le journal est masqué faute de place */
+  .bottom{flex-direction:column;align-items:stretch;gap:6px;padding:0 6px 6px}
+  .log{display:none}
+  .info{width:100%;order:-1}
+  .ihead{font-size:11px;min-height:24px;padding:3px 28px}
+  .hand{--cw:70px;flex:none;height:128px;padding:0 0 2px}
+  .hand .card{width:var(--cw);height:calc(var(--cw) * 1.64)}
+  .card .cart{bottom:24px;font-size:26px}
+  .card .cbar{height:24px;padding:0 2px}
+  .cname{font-size:9px}
+  .cost{width:17px;height:17px;font-size:11px}
+  .creqs{top:18px;left:3px}
+  .creqs .sb{width:12px;height:12px;font-size:8px}
+  .card .ust{bottom:26px}
+  .card .b{width:14px;height:14px;font-size:9px;border-width:1px}
+  .card .b.ret{width:13px;height:13px;font-size:8px}
+  .card .b.hp{width:15px;height:15px;font-size:9px}
+  .card:hover{transform:translateY(-10px)}
+  .card.sel{transform:translateY(-14px)}
+
+  /* Fenêtres et superpositions */
+  .reveal{inset:0}
+  .reveal .card{width:170px;height:244px}
+  .reveal .card .cart{bottom:96px}
+  .reveal .card .cbar{height:96px}
+  .reveal .card .ust{bottom:100px}
+  .grave-box{padding:10px;max-height:92dvh}
+  .grave-body{flex-direction:column}
+  .grave-details{width:100%;order:-1}
+  .grave-details .iart{height:110px}
+  .grave-cards{padding-top:10px}
+  .chooser-box.hero-menu{gap:10px;padding:12px}
+  .hero-menu-portrait{width:110px;font-size:40px}
+  .hero-menu-side .chooser-title{font-size:14px}
+  .hero-menu-options button{padding:7px 10px;font-size:13px}
+  .hero-power-text{font-size:12px}
+  .turn-banner-title{font-size:28px;letter-spacing:2px}
+  .turn-banner-sub{font-size:13px}
+  .overlay h1{font-size:36px}
+  .menu{padding:16px 12px;height:100dvh}
+  .menu h1{font-size:32px}
+  .fac{width:min(300px,100%);height:300px}
+  .rules{padding:12px 14px;font-size:13px}
+}
+
+/* ---------- Événements en jeu (communs aux deux joueurs) ---------- */
+.board{display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:1}
+.events{display:flex;align-items:center;gap:12px}
+.events-cards{display:flex;gap:14px}
+/* Pioche d'événements : petite pile avec le nombre restant */
+.events-deck{width:30px;height:44px;border-radius:4px;border:2px solid #5fb0a0;background:linear-gradient(#1c3a36,#0b1816);box-shadow:2px 2px 0 #0b1816,0 3px 6px #000;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:#cfeee8}
+/* Carte d'événement : format paysage, illustration pleine et nom en bas */
+.event-card{--ew:calc(var(--sw) * 1.15);position:relative;width:var(--ew);height:calc(var(--ew) * .62);border-radius:5px;border:2px solid #3f8f80;background:#0b1816;box-shadow:0 4px 10px #000c;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s,filter .15s}
+.event-card .ev-art{position:absolute;inset:0;background:#1c3a36 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:30px}
+.event-card .ev-name{position:absolute;left:0;right:0;bottom:0;padding:10px 4px 2px;background:linear-gradient(transparent,#000d 45%);color:#e8f6f2;font-size:11px;font-weight:bold;text-align:center;line-height:1.05;text-shadow:0 1px 2px #000}
+.event-card:hover{transform:translateY(-4px) scale(1.05);z-index:5}
+.event-card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
+.event-card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-4px) scale(1.05)}
+/* Déjà utilisé par le joueur actif ce tour-ci */
+.event-card.used{filter:grayscale(.85) brightness(.65)}
+.ev-tag{position:absolute;top:3px;left:3px;font-size:8px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;color:#cfeee8;background:#0b1816d0;border:1px solid #5fb0a0;border-radius:3px;padding:1px 4px;z-index:2}
+/* L'événement de gauche quitte le jeu à la fin du tour */
+.ev-leaving{position:absolute;top:3px;right:3px;font-size:11px;line-height:15px;background:#000a;border-radius:4px;padding:0 2px;z-index:2}
+/* Coût augmenté par un événement permanent */
+.cost.up{color:#ff8a7a;border-color:#ff8a7a}
+.reveal .card.event{border-color:#5fb0a0;box-shadow:0 0 30px #000,0 0 30px #5fb0a088}
+.reveal .card.event .cbar{background:linear-gradient(#1c3a36,#0b1816);border-top-color:#5fb0a0}
+/* Événement en grand : format paysage comme la carte d'origine, l'illustration garde ses proportions (pas de zoom) */
+.icard.event{--frame:#3f8f80;height:auto;width:min(92vw,720px);aspect-ratio:auto;display:flex;flex-direction:column}
+.icard.event .icard-name{position:relative;flex:none;order:-1;color:#bfeee4}
+.icard.event .icard-art{position:relative;inset:auto;width:100%;aspect-ratio:360/198;flex:none;background-position:center}
+.icard.event .icard-art .emoji{font-size:90px}
+.icard.event .icard-box{position:relative;left:auto;right:auto;bottom:auto;margin:12px 14px 14px;min-height:0;max-height:none}
+
+@media (max-width:900px){
+  .board{gap:6px}
+  .events{gap:6px}
+  .events-cards{gap:8px}
+  .events-deck{width:20px;height:30px;font-size:10px;border-width:1px}
+  .event-card{--ew:calc(var(--sw) * 1.3);border-width:1px}
+  .event-card .ev-art{font-size:18px}
+  .event-card .ev-name{font-size:8px;padding-top:6px}
+  .ev-tag{font-size:6px;padding:0 2px}
+}
+/* Événement permanent : pas de rond de coût, le nom est centré */
+.icard.event:not(:has(.icard-cost)) .icard-name{padding-left:16px}

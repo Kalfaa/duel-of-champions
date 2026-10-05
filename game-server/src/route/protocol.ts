@@ -20,6 +20,7 @@ export const gameActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('develop'), choice: z.enum(['m', 'g', 'd', 'draw']) }),
   z.object({ type: z.literal('play'), handIndex: z.number().int().min(0), choices: choicesSchema }),
   z.object({ type: z.literal('power'), choices: choicesSchema }),
+  z.object({ type: z.literal('event'), slot: z.number().int().min(0).max(1), choices: choicesSchema }),
   z.object({ type: z.literal('attack'), uid: z.number().int(), target: targetSchema }),
   z.object({ type: z.literal('move'), uid: z.number().int(), to: slotSchema }),
   z.object({ type: z.literal('endTurn') }),

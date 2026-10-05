@@ -1,4 +1,5 @@
 import { getCard } from './cards';
+import { getEvent } from './events';
 import type { Game, StepOptions, Unit } from './game';
 import { other, sameChoice, type Choice, type DevelopChoice, type GameAction, type PlayerIndex, type StatKey } from './types';
 
@@ -112,8 +113,20 @@ export class AiPlayer implements AiStrategy {
     for (const { unit } of game.units(pi)) {
       for (const target of game.attackTargets(pi, unit.uid)) actions.push({ type: 'attack', uid: unit.uid, target });
     }
-    const b = best(actions.map(action => ({ score: this.simulate(game, pi, action) - base, action })));
+    game.events.forEach((_id, slot) => {
+      if (game.whyNotUseEvent(pi, slot) !== null) return;
+      for (const choices of this.combos(game, pi, game.eventSteps(pi, slot), null)) actions.push({ type: 'event', slot, choices });
+    });
+    const b = best(actions.map(action => ({ score: this.simulate(game, pi, action) - base + this.eventBonus(game, pi, action), action })));
     return b && b.score > MIN_GAIN ? b.action : null;
+  }
+
+  /** Valeur d'un événement qui ne se voit pas sur le plateau (bonus de la prochaine créature déployée). */
+  private eventBonus(game: Game, pi: PlayerIndex, action: GameAction): number {
+    if (action.type !== 'event') return 0;
+    const id = game.events[action.slot];
+    const event = id === undefined ? null : getEvent(id);
+    return event?.kind === 'active' ? event.effect.aiBonus?.(game, pi) ?? 0 : 0;
   }
 
   /** Combinaisons de choix à évaluer ; pour les cartes de la main, seules les moins précieuses sont envisagées. */

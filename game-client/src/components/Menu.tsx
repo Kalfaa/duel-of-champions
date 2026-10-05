@@ -52,7 +52,7 @@ export function Menu({ error, onStart }: Props) {
         • Chaque héros a 20 PV. Réduisez ceux de l'adversaire à 0 pour gagner.<br />
         • Chaque camp possède 2 colonnes (avant / arrière) de 4 couloirs, face à face.<br />
         • Chaque joueur commence avec 6 cartes. Début de tour : +1 ressource max (jusqu'à 10), ressources rechargées, pioche d'une carte. Si la bibliothèque est vide, le héros perd 1 PV par carte manquante.<br />
-        • Votre <b>héros agit une fois par tour</b> (facultatif) : +1 Puissance, Magie ou Destinée, piocher une carte, ou utiliser son pouvoir. Chaque carte exige un coût 💎 et un niveau minimum dans ces caractéristiques.<br />
+        • Votre <b>héros agit une fois par tour</b> (facultatif) : +1 Puissance, Magie ou Destinée, piocher une carte, ou utiliser son pouvoir : cliquez sur votre héros pour choisir. Chaque carte exige un coût 💎 et un niveau minimum dans ces caractéristiques.<br />
         • <b>Mêlée</b> 🗡️ : se déploie sur la ligne avant. <b>Tireur</b> 🏹 : sur la ligne arrière. <b>Volant</b> 🪽 : sur l'une ou l'autre.<br />
         • Chaque créature présente au début de votre tour peut, une fois, <b>attaquer</b> ou <b>se déplacer</b> vers une case adjacente. Une créature qui vient d'être déployée doit attendre le tour suivant.<br />
         • Une créature n'attaque que dans son couloir. Mêlée et volants frappent la ligne avant adverse si elle est occupée ; les tireurs choisissent leur cible. Sans créature adverse dans le couloir, l'attaque touche le héros.<br />

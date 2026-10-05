@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AiPlayer } from '../../../src/model/ai-player';
-import { newGame, place, readyToPlay, state, unit } from './helpers';
+import { newGame, place, readyToPlay, setEvents, state, unit } from './helpers';
 
 describe('AiPlayer', () => {
   const ai = new AiPlayer();
@@ -69,5 +69,15 @@ describe('AiPlayer', () => {
     }
     expect(game.isOver).toBe(true);
     expect(game.winner).not.toBeNull();
+  });
+
+  it('utilise un événement quand il est rentable', () => {
+    const { game, a, b } = newGame();
+    setEvents(game, ['hailStorm', 'manaStorm']);
+    readyToPlay(game, a, [], 4);
+    state(game, a).heroActionUsed = true;
+    place(game, b, 'diablotinChaos', 1, 0);
+    place(game, b, 'diablotinChaos', 1, 1);
+    expect(ai.chooseAction(game, a)).toEqual({ type: 'event', slot: 0, choices: [] });
   });
 });

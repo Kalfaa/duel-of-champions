@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GraveViewer } from '../../../src/components/GraveViewer';
 import { card, player, view } from '../fixtures';
 
-const render = (v: ReturnType<typeof view>, p: 0 | 1) => renderToStaticMarkup(<GraveViewer view={v} player={p} onClose={() => {}} />);
+const render = (v: ReturnType<typeof view>, p: 0 | 1) => renderToStaticMarkup(<GraveViewer view={v} player={p} onClose={() => {}} onInspect={() => {}} />);
 
 describe('GraveViewer', () => {
   it('liste les cartes du cimetière adverse, la plus récente en premier, avec les détails de la dernière', () => {

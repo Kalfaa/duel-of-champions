@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GameRuleError } from '../../../src/model/errors';
 import { Game, HERO_HP, STARTING_HAND } from '../../../src/model/game';
-import { newGame, place, playNow, powerNow, readyToPlay, slot, state, unit } from './helpers';
+import { FACTIONS } from '../../../src/model/factions';
+import { newGame, place, playNow, powerNow, readyToPlay, setEvents, slot, state, unit } from './helpers';
 
 describe('Game — mise en place et ravitaillement', () => {
   it('chaque joueur pioche 6 cartes, puis le premier pioche au début de son tour', () => {
@@ -754,5 +755,145 @@ describe('Game — abandon et événements', () => {
     playNow(game, a, 1, [{ kind: 'hand', index: 0 }]);
     expect(game.drainEvents()).toEqual([{ kind: 'damage', target: { kind: 'hero', player: b }, amount: 2 }]);
     expect(game.drainEvents()).toEqual([]);
+  });
+});
+
+describe('Game — événements', () => {
+  /** Utilise un événement et le résout immédiatement. */
+  const eventNow = (game: Game, pi: 0 | 1, slotIndex: number, choices: Parameters<Game['useEvent']>[2] = []) => {
+    game.useEvent(pi, slotIndex, choices);
+    game.resolvePending();
+  };
+
+  it('mélange les 8 événements de chaque joueur et en met deux en jeu', () => {
+    const game = Game.create({ id: 'g', seed: 3, players: [{ id: 'p0', faction: 'havre', isAi: false }, { id: 'p1', faction: 'inferno', isAi: false }] });
+    expect(game.events).toHaveLength(2);
+    expect(game.eventDeckCount).toBe(14);
+    const brought = [...FACTIONS.havre.events, ...FACTIONS.inferno.events];
+    game.events.forEach(id => expect(brought).toContain(id));
+  });
+
+  it('en fin de tour, l\'événement de gauche sort, celui de droite prend sa place et un nouveau arrive', () => {
+    const { game, a } = newGame();
+    game.endTurn(a);
+    expect(game.events[0]).toBe('dayOfFortune');
+    expect(game.events).toHaveLength(2);
+    expect(game.eventDeckCount).toBe(13);
+  });
+
+  it('remélange les événements sortis quand la pioche est vide', () => {
+    const { game, a, b } = newGame();
+    for (let i = 0; i < 20; i++) game.endTurn(i % 2 === 0 ? a : b);
+    expect(game.events).toHaveLength(2);
+    expect(game.eventDeckCount + game.events.length).toBeLessThanOrEqual(16);
+  });
+
+  it('un événement est payé et révélé, puis résolu ; chaque joueur peut l\'utiliser une fois par tour', () => {
+    const { game, a, b } = newGame();
+    readyToPlay(game, a, [], 5);
+    state(game, b).hand = [];
+    game.useEvent(a, 0, []);
+    expect(game.pending).toMatchObject({ kind: 'event', player: a, eventId: 'celebration' });
+    expect(game.player(a).res).toBe(3);
+    expect(game.whyNotUseEvent(a, 1)).toBe('Un événement est en cours de résolution.');
+    game.resolvePending();
+    expect(game.player(a).hand).toHaveLength(1);
+    expect(game.player(b).hand).toHaveLength(1);
+    expect(game.whyNotUseEvent(a, 0)).toBe('Vous avez déjà utilisé cet événement ce tour-ci.');
+
+    setEvents(game, ['celebration', 'celebration']);
+    eventNow(game, a, 1);
+    game.endTurn(a);
+    setEvents(game, ['celebration', 'dayOfFortune']);
+    state(game, b).res = 2;
+    expect(game.whyNotUseEvent(b, 0)).toBeNull();
+  });
+
+  it('refuse un événement trop cher ou permanent', () => {
+    const { game, a } = newGame();
+    setEvents(game, ['hailStorm', 'manaStorm']);
+    state(game, a).res = 3;
+    expect(game.whyNotUseEvent(a, 0)).toBe('Pas assez de ressources.');
+    expect(game.whyNotUseEvent(a, 1)).toMatch(/permanent/);
+    expect(() => game.useEvent(a, 1, [])).toThrow(GameRuleError);
+  });
+
+  it('Jour de fortune : défausse la carte choisie puis pioche', () => {
+    const { game, a } = newGame();
+    readyToPlay(game, a, ['soin', 'traitFeu']);
+    state(game, a).deck = ['cerbere'];
+    eventNow(game, a, 1, [{ kind: 'hand', index: 1 }]);
+    expect(game.player(a).hand).toEqual(['soin', 'cerbere']);
+    expect(game.player(a).grave).toEqual(['traitFeu']);
+  });
+
+  it('Marché des ombres : 1 dégât à son héros et une carte', () => {
+    const { game, a } = newGame();
+    setEvents(game, ['marketOfShadows', 'celebration']);
+    readyToPlay(game, a, []);
+    eventNow(game, a, 0);
+    expect(game.player(a).hp).toBe(HERO_HP - 1);
+    expect(game.player(a).hand).toHaveLength(1);
+  });
+
+  it('Tempête de grêle : 1 dégât à chaque créature', () => {
+    const { game, a, b } = newGame();
+    setEvents(game, ['hailStorm', 'celebration']);
+    state(game, a).res = 4;
+    const mine = place(game, a, 'griffonLoyal', 0, 0);
+    const theirs = place(game, b, 'cerbere', 0, 1);
+    const fragile = place(game, b, 'diablotinChaos', 1, 1);
+    eventNow(game, a, 0);
+    expect(mine.hpCur).toBe(3);
+    expect(theirs.hpCur).toBe(2);
+    expect(game.locate(fragile.uid)).toBeNull();
+  });
+
+  it('Jour de la conscription : +1 Puissance pour les deux joueurs', () => {
+    const { game, a, b } = newGame();
+    setEvents(game, ['conscriptionDay', 'celebration']);
+    state(game, a).res = 3;
+    const before = [game.player(a).m, game.player(b).m];
+    eventNow(game, a, 0);
+    expect([game.player(a).m, game.player(b).m]).toEqual([before[0]! + 1, before[1]! + 1]);
+  });
+
+  it('les bonus de déploiement s\'appliquent à la prochaine créature déployée ce tour-ci seulement', () => {
+    const { game, a } = newGame();
+    setEvents(game, ['weaponsmiths', 'emeraldSong']);
+    readyToPlay(game, a, ['griffonLoyal', 'griffonLoyal']);
+    eventNow(game, a, 0);
+    eventNow(game, a, 1);
+    playNow(game, a, 0, [slot(0, 0)]);
+    playNow(game, a, 0, [slot(0, 1)]);
+    expect(game.player(a).board[0]![0]).toMatchObject({ atk: 3, hpCur: 6, hpMax: 6 });
+    expect(game.player(a).board[0]![1]).toMatchObject({ atk: 2, hpCur: 4 });
+  });
+
+  it('Jour du loup déchu : +2 en riposte, perdu à la fin du tour s\'il n\'a pas servi', () => {
+    const { game, a, b } = newGame();
+    setEvents(game, ['fallenWolf', 'celebration']);
+    readyToPlay(game, a, ['griffonLoyal']);
+    eventNow(game, a, 0);
+    playNow(game, a, 0, [slot(0, 0)]);
+    expect(game.player(a).board[0]![0]!.ret).toBe(3);
+    setEvents(game, ['fallenWolf', 'celebration']);
+    state(game, a).res = 3;
+    eventNow(game, a, 0);
+    game.endTurn(a);
+    game.endTurn(b);
+    expect(game.player(a).nextDeployBonus).toEqual({ atk: 0, ret: 0, hp: 0 });
+  });
+
+  it('Tempête de mana et Semaine des impôts augmentent le coût des sorts et des fortunes', () => {
+    const { game, a } = newGame();
+    readyToPlay(game, a, ['traitFeu', 'autelDestruction', 'cerbere'], 1);
+    setEvents(game, ['manaStorm', 'weekOfTaxes']);
+    expect(game.whyNotPlay(a, 0)).toBe('Pas assez de ressources.');
+    expect(game.whyNotPlay(a, 1)).toBe('Pas assez de ressources.');
+    state(game, a).res = 2;
+    const enemy = place(game, 1, 'cerbere', 0, 0);
+    playNow(game, a, 0, [unit(enemy)]);
+    expect(game.player(a).res).toBe(0);
   });
 });

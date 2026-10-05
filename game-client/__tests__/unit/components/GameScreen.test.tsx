@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GameScreen } from '../../../src/components/GameScreen';
 import { logClass } from '../../../src/components/GameLog';
 import { EMPTY_UI } from '../../../src/game/selection';
-import { card, mainOptions, playable, player, step, unit, view } from '../fixtures';
+import { card, gameEvent, mainOptions, playable, player, step, unit, view } from '../fixtures';
 
 const render = (v = view()) =>
   renderToStaticMarkup(<GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />);
@@ -32,6 +32,14 @@ describe('GameScreen', () => {
     expect(html).toContain('class="b hp" style="--hp:1" title="Points de vie : 3/3"');
   });
 
+  it('affiche les écoles de magie de chaque héros', () => {
+    const html = render(view({
+      players: [player(), player({ hand: null, hero: { ...player().hero, schools: ['Feu'] } })],
+    }));
+    expect(html).toContain('<span class="school" title="Magie : Lumière">☀️</span>');
+    expect(html).toContain('<span class="school" title="Magie : Feu">🔥</span>');
+  });
+
   it('anime seulement la créature qui attaque', () => {
     const board = [[unit(1), unit(2), null, null], [null, null, null, null]];
     const v = view({ players: [player({ board }), player({ hand: null })] });
@@ -55,12 +63,17 @@ describe('GameScreen', () => {
     expect(html).toContain('<div class="flash">-2</div>');
   });
 
-  it('propose l\'action du héros tant qu\'elle est disponible', () => {
-    const html = render(view());
-    expect(html).toContain('+1 Puissance');
-    expect(html).toContain('🂠 Piocher');
+  it('fait briller le héros tant qu\'il peut agir, et propose ses actions quand on clique dessus', () => {
+    expect(render(view())).toContain('herocard p0 active ready');
+    expect(render(view())).not.toContain('+1 Puissance');
+    const menu = renderToStaticMarkup(
+      <GameScreen view={view({ options: mainOptions({ power: { usable: false, reason: 'Pas assez de ressources.', steps: [] } }) })}
+        ui={{ selection: { kind: 'heroMenu' }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
+    );
+    for (const label of ['+1 Puissance', '+1 Magie', '+1 Destinée', '🂠 Piocher']) expect(menu).toContain(label);
+    expect(menu).toContain('disabled="" title="Pas assez de ressources."');
     const used = render(view({ options: mainOptions({ heroAction: { available: false, reason: 'Votre héros a déjà agi ce tour-ci.', drawReason: null } }) }));
-    expect(used).not.toContain('+1 Puissance');
+    expect(used).not.toContain('ready');
   });
 
   it('indique le tour adverse quand le joueur n\'a pas la main', () => {
@@ -134,6 +147,32 @@ describe('GameScreen', () => {
   it('affiche la victoire en fin de partie', () => {
     expect(render(view({ phase: 'over', winner: 0, options: null }))).toContain('Victoire');
     expect(render(view({ phase: 'over', winner: 1, options: null }))).toContain('Défaite');
+  });
+
+  it('affiche les événements en jeu, utilisables, déjà utilisés ou permanents', () => {
+    const html = render(view({
+      events: [gameEvent({ used: true }), gameEvent({ id: 'manaStorm', name: 'Tempête de mana', cost: null, ongoing: true, art: 'Mana_Storm' })],
+      options: mainOptions({ events: [{ usable: false, reason: 'Déjà utilisé.', steps: [] }, { usable: false, reason: 'Permanent.', steps: [] }] }),
+    }));
+    expect(html).toContain('<div class="events-deck" title="Événements restants dans la pioche commune : 14">14</div>');
+    expect(html).toContain('class="event-card used"');
+    expect(html).toContain('Tempête de mana');
+    expect(html).toContain('<div class="ev-tag">Permanent</div>');
+    expect(html).toContain('title="Quitte le jeu à la fin du tour"');
+  });
+
+  it('montre le coût augmenté d\'une carte de la main', () => {
+    const html = render(view({
+      players: [player({ hand: [card({ type: 'spell', cost: 1 })] }), player({ hand: null })],
+      options: mainOptions({ hand: [{ ...playable(), cost: 2 }] }),
+    }));
+    expect(html).toContain('class="cost up"');
+  });
+
+  it('révèle l\'événement utilisé par l\'adversaire', () => {
+    const html = render(view({ current: 1, options: null, pending: { kind: 'event', player: 1, event: gameEvent({ used: true }), choices: [] } }));
+    expect(html).toContain('class="card event"');
+    expect(html).toContain('utilise l&#x27;événement');
   });
 });
 

@@ -8,8 +8,12 @@ export type Selection =
   | { kind: 'hand'; index: number; choices: Choice[] }
   /** Le pouvoir du héros, avec les choix déjà faits. */
   | { kind: 'power'; choices: Choice[] }
+  /** Un événement en jeu, avec les choix déjà faits. */
+  | { kind: 'event'; slot: number; choices: Choice[] }
   /** Une de ses créatures, pour l'attaque ou le déplacement. */
   | { kind: 'unit'; uid: number }
+  /** Son héros : la fenêtre des actions du héros (caractéristique, pioche, pouvoir) est ouverte. */
+  | { kind: 'heroMenu' }
   | null;
 
 export interface UiState {
@@ -24,6 +28,7 @@ export type Click =
   | { kind: 'slot'; player: PlayerIndex; row: number; lane: number }
   | { kind: 'hero'; player: PlayerIndex }
   | { kind: 'power' }
+  | { kind: 'event'; slot: number }
   /** Une option choisie dans la fenêtre de choix (mode, carte de la bibliothèque ou du cimetière). */
   | { kind: 'choose'; choice: Choice }
   | { kind: 'develop'; choice: DevelopChoice }
@@ -42,12 +47,25 @@ const includes = (list: readonly Choice[], c: Choice): boolean => list.some(x =>
 const act = (action: GameAction): ClickResult => ({ ui: EMPTY_UI, action });
 const say = (message: string, selection: Selection = null): ClickResult => ({ ui: { selection, message }, action: null });
 
-const stepsOf = (options: TurnOptions, selection: Casting): StepView[] =>
-  selection.kind === 'hand' ? options.hand[selection.index]?.steps ?? [] : options.power.steps;
+function stepsOf(options: TurnOptions, selection: Casting): StepView[] {
+  switch (selection.kind) {
+    case 'hand': return options.hand[selection.index]?.steps ?? [];
+    case 'event': return options.events[selection.slot]?.steps ?? [];
+    case 'power': return options.power.steps;
+  }
+}
+
+function castAction(selection: Casting, choices: Choice[]): GameAction {
+  switch (selection.kind) {
+    case 'hand': return { type: 'play', handIndex: selection.index, choices };
+    case 'event': return { type: 'event', slot: selection.slot, choices };
+    case 'power': return { type: 'power', choices };
+  }
+}
 
 /** Étape de choix en cours pour la carte ou le pouvoir sélectionné. */
 export function currentStep(view: GameView, selection: Selection): StepView | null {
-  if (!view.options || !selection || selection.kind === 'unit') return null;
+  if (!view.options || !selection || !('choices' in selection)) return null;
   return stepsOf(view.options, selection)[selection.choices.length] ?? null;
 }
 
@@ -59,7 +77,7 @@ function advance(options: TurnOptions, selection: Casting, choice: Choice | null
   const choices = choice ? [...selection.choices, choice] : selection.choices;
   const steps = stepsOf(options, selection);
   const next = steps[choices.length];
-  if (!next) return act(selection.kind === 'hand' ? { type: 'play', handIndex: selection.index, choices } : { type: 'power', choices });
+  if (!next) return act(castAction(selection, choices));
   return say(`${next.prompt} (clic droit pour annuler)`, { ...selection, choices });
 }
 
@@ -70,7 +88,7 @@ export function handleClick(view: GameView, ui: UiState, click: Click): ClickRes
   const options = view.options;
   if (!options) return unchanged;
   const selection = ui.selection;
-  const casting = selection && selection.kind !== 'unit' ? selection : null;
+  const casting = selection && 'choices' in selection ? selection : null;
   const step = casting ? currentStep(view, casting) : null;
   const selectedUnit = selection?.kind === 'unit' ? options.units.find(u => u.uid === selection.uid) : undefined;
 
@@ -111,8 +129,22 @@ export function handleClick(view: GameView, ui: UiState, click: Click): ClickRes
       return advance(options, { kind: 'power', choices: [] }, null);
     }
 
-    case 'hero':
-      return choose(click) ?? attackOn(click) ?? unchanged;
+    case 'event': {
+      if (selection?.kind === 'event' && selection.slot === click.slot) return { ui: EMPTY_UI, action: null };
+      const event = options.events[click.slot];
+      if (!event) return unchanged;
+      if (!event.usable) return say(event.reason ?? 'Événement indisponible.');
+      return advance(options, { kind: 'event', slot: click.slot, choices: [] }, null);
+    }
+
+    case 'hero': {
+      const used = choose(click) ?? attackOn(click);
+      if (used) return used;
+      if (click.player !== view.you || casting) return unchanged;
+      if (selection?.kind === 'heroMenu') return { ui: EMPTY_UI, action: null };
+      if (!options.heroAction.available) return say(options.heroAction.reason ?? 'Votre héros ne peut pas agir.');
+      return say('', { kind: 'heroMenu' });
+    }
 
     case 'slot': {
       const { player, row, lane } = click;
@@ -174,6 +206,7 @@ export function highlights(view: GameView, selection: Selection): Highlights {
   if (view.pending) add(view.pending.choices, view.pending.player);
   const options = view.options;
   if (!options || !selection) return h;
+  if (selection.kind === 'heroMenu') return h;
   if (selection.kind === 'unit') {
     const unit = options.units.find(u => u.uid === selection.uid);
     add(unit?.attackTargets ?? []);

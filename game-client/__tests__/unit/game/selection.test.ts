@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_UI, handleClick, highlights, type UiState } from '../../../src/game/selection';
-import { card, mainOptions, playable, player, step, unit, view } from '../fixtures';
+import { card, gameEvent, mainOptions, playable, player, step, unit, view } from '../fixtures';
 
 describe('handleClick', () => {
   it('ne fait rien quand ce n\'est pas au joueur d\'agir', () => {
@@ -10,6 +10,19 @@ describe('handleClick', () => {
 
   it('envoie l\'action du héros choisie', () => {
     expect(handleClick(view(), EMPTY_UI, { kind: 'develop', choice: 'g' }).action).toEqual({ type: 'develop', choice: 'g' });
+  });
+
+  it('ouvre puis referme les actions du héros quand le joueur clique sur son héros', () => {
+    const opened = handleClick(view(), EMPTY_UI, { kind: 'hero', player: 0 });
+    expect(opened).toEqual({ ui: { selection: { kind: 'heroMenu' }, message: '' }, action: null });
+    expect(handleClick(view(), opened.ui, { kind: 'hero', player: 0 }).ui).toEqual(EMPTY_UI);
+    expect(handleClick(view(), opened.ui, { kind: 'develop', choice: 'd' })).toEqual({ ui: EMPTY_UI, action: { type: 'develop', choice: 'd' } });
+    expect(handleClick(view(), EMPTY_UI, { kind: 'hero', player: 1 }).ui).toEqual(EMPTY_UI);
+  });
+
+  it('explique pourquoi le héros ne peut plus agir au lieu d\'ouvrir ses actions', () => {
+    const v = view({ options: mainOptions({ heroAction: { available: false, reason: 'Votre héros a déjà agi ce tour-ci.', drawReason: null } }) });
+    expect(handleClick(v, EMPTY_UI, { kind: 'hero', player: 0 }).ui).toEqual({ selection: null, message: 'Votre héros a déjà agi ce tour-ci.' });
   });
 
   it('refuse une seconde action du héros en expliquant pourquoi', () => {
@@ -26,7 +39,7 @@ describe('handleClick', () => {
   });
 
   it('affiche la raison pour laquelle une carte est injouable', () => {
-    const v = view({ options: mainOptions({ hand: [{ playable: false, reason: 'Pas assez de ressources.', steps: [] }] }) });
+    const v = view({ options: mainOptions({ hand: [{ cost: 3, playable: false, reason: 'Pas assez de ressources.', steps: [] }] }) });
     expect(handleClick(v, EMPTY_UI, { kind: 'hand', index: 0 }).ui).toEqual({ selection: null, message: 'Pas assez de ressources.' });
   });
 
@@ -187,6 +200,21 @@ describe('handleClick', () => {
   it('annule la sélection', () => {
     const ui: UiState = { selection: { kind: 'power', choices: [] }, message: 'Choisissez' };
     expect(handleClick(view(), ui, { kind: 'cancel' }).ui).toEqual(EMPTY_UI);
+  });
+
+  it('utilise un événement sans choix d\'un clic, ou demande ses choix', () => {
+    const usable = { usable: true, reason: null, steps: [] };
+    const v = view({ events: [gameEvent(), gameEvent({ id: 'dayOfFortune' })], options: mainOptions({ events: [usable, { ...usable, steps: [step([{ kind: 'hand', index: 0 }], { prompt: 'Choisissez la carte à défausser.' })] }] }) });
+    expect(handleClick(v, EMPTY_UI, { kind: 'event', slot: 0 }).action).toEqual({ type: 'event', slot: 0, choices: [] });
+    const picking = handleClick(v, EMPTY_UI, { kind: 'event', slot: 1 });
+    expect(picking.ui.selection).toEqual({ kind: 'event', slot: 1, choices: [] });
+    expect(picking.ui.message).toContain('Choisissez la carte à défausser.');
+    expect(handleClick(v, picking.ui, { kind: 'hand', index: 0 }).action).toEqual({ type: 'event', slot: 1, choices: [{ kind: 'hand', index: 0 }] });
+  });
+
+  it('explique pourquoi un événement ne peut pas être utilisé', () => {
+    const v = view({ events: [gameEvent()], options: mainOptions({ events: [{ usable: false, reason: 'Vous avez déjà utilisé cet événement ce tour-ci.', steps: [] }] }) });
+    expect(handleClick(v, EMPTY_UI, { kind: 'event', slot: 0 }).ui.message).toBe('Vous avez déjà utilisé cet événement ce tour-ci.');
   });
 });
 

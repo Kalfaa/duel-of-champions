@@ -1,32 +1,36 @@
-import type { CardView, DevelopChoice, GameView, PlayerIndex, UnitView } from '../api/protocol';
+import type { CardView, GameView, PlayerIndex } from '../api/protocol';
 import type { Click } from '../game/selection';
 import { ArtFallback, artStyle, keywordList, ReqBadges, typeLabel } from './common';
 
 export type Hover =
   | { kind: 'hand'; index: number }
   | { kind: 'unit'; uid: number }
-  | { kind: 'hero'; player: PlayerIndex };
+  | { kind: 'hero'; player: PlayerIndex }
+  /** Un des deux événements en jeu. */
+  | { kind: 'event'; slot: number };
 
 interface Props {
   view: GameView;
   message: string;
   hover: Hover | null;
   onClick(click: Click): void;
+  onInspect(target: Hover): void;
 }
 
-function Head({ view, message, onClick }: Omit<Props, 'hover'>) {
+function Head({ view, message, onClick }: Omit<Props, 'hover' | 'onInspect'>) {
   if (view.phase === 'over') return <>Partie terminée</>;
   if (view.pending) {
     const who = view.players[view.pending.player].hero.name;
-    return view.pending.kind === 'card' ? <>{who} joue {view.pending.card.name}…</> : <>{who} utilise {view.pending.power.name}…</>;
+    switch (view.pending.kind) {
+      case 'card': return <>{who} joue {view.pending.card.name}…</>;
+      case 'power': return <>{who} utilise {view.pending.power.name}…</>;
+      case 'event': return <>{who} utilise l'événement {view.pending.event.name}…</>;
+    }
   }
   const options = view.options;
   if (!options) return <>L'adversaire réfléchit…</>;
   if (message) return <>{message}</>;
-  if (options.heroAction.available) {
-    const dev = (choice: DevelopChoice, label: string) => <button onClick={() => onClick({ kind: 'develop', choice })}>{label}</button>;
-    return <>Héros : {dev('m', '+1 Puissance')}{dev('g', '+1 Magie')}{dev('d', '+1 Destinée')}{dev('draw', 'Piocher (1💎)')} ou pouvoir</>;
-  }
+  if (options.heroAction.available) return <>Cliquez sur votre héros pour développer une caractéristique, piocher ou utiliser son pouvoir.</>;
   return <>Jouez vos cartes, attaquez ou déplacez vos créatures, puis terminez le tour.</>;
 }
 
@@ -55,56 +59,14 @@ export function CardDetails({ card, hp, ownerStats, status = [] }: { card: CardV
   );
 }
 
-/** État particulier d'une créature sur le plateau : pile, poison, enchantements. */
-function unitStatus(u: UnitView): string[] {
-  const r: string[] = [];
-  if (u.stack > 1) r.push(`📚 Pile de ${u.stack}`);
-  if (u.poison) r.push(`☠️ Poison ${u.poison}`);
-  if (u.enchantments.length) r.push(`✨ ${u.enchantments.join(', ')}`);
-  return r;
-}
-
-function Body({ view, hover }: { view: GameView; hover: Hover | null }) {
-  const hint = <div className="ihint">Survolez une carte pour voir ses détails.</div>;
-  if (!hover) return hint;
-  const me = view.players[view.you];
-
-  if (hover.kind === 'hero') {
-    const p = view.players[hover.player];
-    const { hero } = p;
-    return (
-      <>
-        <div className="iart" style={artStyle(hero.art)}><ArtFallback art={hero.art} icon={hero.icon} /></div>
-        <div className="itext">
-          <div className="iname">{hero.name}</div>
-          <div className="itype">Héros – {p.factionLabel}</div>
-          <div className="idesc"><b>✨ {hero.power.name} ({hero.power.cost}💎)</b> : {hero.power.text}</div>
-          <div className="istats"><span className="hpv">❤ {p.hp}/{p.maxHp}</span><span>Deck {p.deckCount}</span><span>Main {p.handCount}</span></div>
-        </div>
-      </>
-    );
-  }
-
-  if (hover.kind === 'hand') {
-    const card = me.hand?.[hover.index];
-    if (!card) return hint;
-    return <CardDetails card={card} hp={card.type === 'creature' ? String(card.hp) : null} ownerStats={me} />;
-  }
-
-  for (const p of view.players) {
-    for (const row of p.board) {
-      const u = row.find(x => x?.uid === hover.uid);
-      if (u) return <CardDetails card={{ ...u.card, atk: u.atk, ret: u.ret, keywords: u.keywords }} hp={`${u.hpCur}/${u.hpMax}`} status={unitStatus(u)} />;
-    }
-  }
-  return hint;
-}
-
-export function InfoPanel({ view, message, hover, onClick }: Props) {
+export function InfoPanel({ view, message, hover, onClick, onInspect }: Props) {
   return (
     <div className="info">
-      <div className="ihead"><Head view={view} message={message} onClick={onClick} /></div>
-      <div className="ibody"><Body view={view} hover={hover} /></div>
+      <div className="ihead">
+        <Head view={view} message={message} onClick={onClick} />
+        {/* Sur écran tactile, pas de clic droit : ce bouton ouvre en grand la dernière carte touchée */}
+        {hover && <button className="izoom" title="Voir la carte en grand" onClick={() => onInspect(hover)}>🔍</button>}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { getCard, type Card } from './cards';
+import { getEvent } from './events';
 import { FACTIONS } from './factions';
 import type { Game, LogEntry, StepOptions, Unit } from './game';
 import type {
@@ -45,6 +46,10 @@ export interface HeroView {
   name: string;
   icon: string;
   art: string;
+  /** Puissance, Magie et Destinée de départ du héros. */
+  base: Record<StatKey, number>;
+  /** Écoles de magie utilisées par le héros (Lumière, Ténèbres, Feu…). */
+  schools: string[];
   power: { name: string; cost: number; text: string };
 }
 
@@ -79,7 +84,23 @@ export interface StepView {
   distinctFrom: number | null;
 }
 
+/** Événement en jeu, visible par les deux joueurs. */
+export interface EventView {
+  id: string;
+  name: string;
+  icon: string;
+  art: string;
+  text: string;
+  /** Coût d'utilisation ; null pour un événement permanent. */
+  cost: number | null;
+  ongoing: boolean;
+  /** Déjà utilisé par le joueur actif ce tour-ci. */
+  used: boolean;
+}
+
 export interface HandOption {
+  /** Coût réel de la carte, modifié par les événements permanents. */
+  cost: number;
   playable: boolean;
   reason: string | null;
   steps: StepView[];
@@ -90,6 +111,8 @@ export interface PowerOption {
   reason: string | null;
   steps: StepView[];
 }
+
+export type EventOption = PowerOption;
 
 /** Ce qu'une créature du joueur peut faire ce tour-ci : attaquer une cible ou se déplacer. */
 export interface UnitOption {
@@ -105,13 +128,15 @@ export interface TurnOptions {
   heroAction: { available: boolean; reason: string | null; drawReason: string | null };
   hand: HandOption[];
   power: PowerOption;
+  /** Un par événement en jeu, dans le même ordre. */
+  events: EventOption[];
   units: UnitOption[];
   canEndTurn: boolean;
 }
 
 /** Carte jouée ou pouvoir utilisé, affiché en grand le temps de sa résolution. */
 export type PendingView = { player: PlayerIndex; choices: Choice[] }
-  & ({ kind: 'card'; card: CardView } | { kind: 'power'; power: HeroView['power'] });
+  & ({ kind: 'card'; card: CardView } | { kind: 'power'; power: HeroView['power'] } | { kind: 'event'; event: EventView });
 
 export interface PlayerGameView {
   gameId: string;
@@ -124,6 +149,9 @@ export interface PlayerGameView {
   /** Seuls les choix visibles sur le plateau sont montrés (pas les cartes choisies dans la main). */
   pending: PendingView | null;
   players: [PlayerView, PlayerView];
+  /** Les deux événements en jeu : celui de gauche part à la fin du tour. */
+  events: EventView[];
+  eventDeckCount: number;
   log: LogEntry[];
   options: TurnOptions | null;
 }
@@ -155,13 +183,23 @@ function toPlayerView(game: Game, pi: PlayerIndex, visibleHand: boolean): Player
   const power = faction.hero.power;
   return {
     faction: p.faction, factionLabel: faction.label, factionIcon: faction.icon,
-    hero: { name: faction.hero.name, icon: faction.hero.icon, art: faction.hero.art, power: { name: power.name, cost: power.cost, text: power.text } },
+    hero: { name: faction.hero.name, icon: faction.hero.icon, art: faction.hero.art,
+      base: { m: faction.hero.m, g: faction.hero.g, d: faction.hero.d }, schools: [...faction.hero.schools],
+      power: { name: power.name, cost: power.cost, text: power.text } },
     hp: p.hp, maxHp: p.maxHp, m: p.m, g: p.g, d: p.d, res: p.res, maxRes: p.maxRes,
     deckCount: p.deck.length, handCount: p.hand.length,
     hand: visibleHand ? p.hand.map(id => toCardView(getCard(id))) : null,
     grave: p.grave.map(id => toCardView(getCard(id))),
     board: p.board.map(row => row.map(u => (u ? toUnitView(game, u) : null))),
     heroActionUsed: p.heroActionUsed,
+  };
+}
+
+function toEventView(id: string, used: boolean): EventView {
+  const e = getEvent(id);
+  return {
+    id: e.id, name: e.name, icon: e.icon, art: e.art, text: e.text,
+    cost: e.kind === 'active' ? e.cost : null, ongoing: e.kind === 'ongoing', used,
   };
 }
 
@@ -177,9 +215,13 @@ function toStepView({ step, options }: StepOptions): StepView {
 
 function turnOptions(game: Game, pi: PlayerIndex): TurnOptions | null {
   if (game.current !== pi || game.phase !== 'action' || game.pending || game.hasPendingRetaliation) return null;
-  const hand = game.player(pi).hand.map((_id, i): HandOption => {
+  const hand = game.player(pi).hand.map((id, i): HandOption => {
     const reason = game.whyNotPlay(pi, i);
-    return { playable: reason === null, reason, steps: reason === null ? game.playSteps(pi, i).map(toStepView) : [] };
+    return { cost: game.cardCost(getCard(id)), playable: reason === null, reason, steps: reason === null ? game.playSteps(pi, i).map(toStepView) : [] };
+  });
+  const events = game.events.map((_id, slot): EventOption => {
+    const reason = game.whyNotUseEvent(pi, slot);
+    return { usable: reason === null, reason, steps: reason === null ? game.eventSteps(pi, slot).map(toStepView) : [] };
   });
   const powerReason = game.whyNotPower(pi);
   const power: PowerOption = {
@@ -195,7 +237,7 @@ function turnOptions(game: Game, pi: PlayerIndex): TurnOptions | null {
   }));
   return {
     heroAction: { available: heroReason === null, reason: heroReason, drawReason: game.whyNotDevelop(pi, 'draw') },
-    hand, power, units, canEndTurn: true,
+    hand, power, events, units, canEndTurn: true,
   };
 }
 
@@ -206,6 +248,7 @@ function pendingView(game: Game): PendingView | null {
   if (!pending) return null;
   const base = { player: pending.player, choices: pending.choices.filter(onBoard) };
   if (pending.kind === 'card') return { ...base, kind: 'card', card: toCardView(getCard(pending.cardId)) };
+  if (pending.kind === 'event') return { ...base, kind: 'event', event: toEventView(pending.eventId, true) };
   const { name, cost, text } = game.heroPower(pending.player);
   return { ...base, kind: 'power', power: { name, cost, text } };
 }
@@ -217,6 +260,8 @@ export function buildPlayerView(game: Game, pi: PlayerIndex): PlayerGameView {
     winner: game.winner,
     pending: pendingView(game),
     players: [toPlayerView(game, 0, pi === 0), toPlayerView(game, 1, pi === 1)],
+    events: game.events.map((id, slot) => toEventView(id, game.eventUsed(slot))),
+    eventDeckCount: game.eventDeckCount,
     log: game.log.map(l => ({ ...l })),
     options: turnOptions(game, pi),
   };

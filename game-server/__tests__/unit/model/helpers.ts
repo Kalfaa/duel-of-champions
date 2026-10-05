@@ -16,8 +16,19 @@ export function newGame(factions: [FactionId, FactionId] = ['havre', 'inferno'],
       id: 'g1', seed: s,
       players: [{ id: 'p0', faction: factions[0], isAi: false }, { id: 'p1', faction: factions[1], isAi: false }],
     });
-    if (game.current === 0) return { game, a: 0, b: other(0) };
+    if (game.current === 0) {
+      // Événements sans effet permanent, pour que les coûts des cartes ne dépendent pas du tirage
+      setEvents(game, ['celebration', 'dayOfFortune']);
+      return { game, a: 0, b: other(0) };
+    }
   }
+}
+
+/** Remplace les événements en jeu (et remet à zéro leur utilisation du tour). */
+export function setEvents(game: Game, ids: string[]): void {
+  const internals = game as unknown as { eventRow: string[]; eventsUsed: boolean[] };
+  internals.eventRow = [...ids];
+  internals.eventsUsed = ids.map(() => false);
 }
 
 /** Accès en écriture à l'état d'un joueur, pour préparer une situation de test. */

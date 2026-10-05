@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayerView } from '../../../src/model/game-view';
 import { STARTING_HAND } from '../../../src/model/game';
-import { newGame, place, readyToPlay, state, unit } from './helpers';
+import { FACTIONS } from '../../../src/model/factions';
+import { newGame, place, readyToPlay, setEvents, state, unit } from './helpers';
 
 describe('buildPlayerView', () => {
   it('montre sa propre main et cache celle de l\'adversaire', () => {
@@ -21,6 +22,14 @@ describe('buildPlayerView', () => {
     }
   });
 
+  it('indique les écoles de magie de chaque héros', () => {
+    const { game, a, b } = newGame();
+    const view = buildPlayerView(game, a);
+    for (const pi of [a, b]) {
+      expect(view.players[pi].hero.schools).toEqual([...FACTIONS[state(game, pi).faction].hero.schools]);
+    }
+  });
+
   it('ne donne des options qu\'au joueur actif', () => {
     const { game, a, b } = newGame();
     expect(buildPlayerView(game, a).options?.heroAction).toEqual({ available: true, reason: null, drawReason: null });
@@ -36,7 +45,7 @@ describe('buildPlayerView', () => {
 
     expect(options.canEndTurn).toBe(true);
     expect(options.hand[0]).toEqual({
-      playable: true, reason: null,
+      cost: 1, playable: true, reason: null,
       steps: [{ prompt: 'Choisissez la créature à soigner.', options: [unit(ally), unit(enemy)], labels: null, cards: null, distinctFrom: null }],
     });
     expect(options.hand[1]).toMatchObject({ playable: true, steps: [] });
@@ -113,5 +122,25 @@ describe('buildPlayerView', () => {
     expect(option.playable).toBe(false);
     expect(option.reason).toBe('Pas assez de ressources.');
     expect(option.steps).toEqual([]);
+  });
+
+  it('montre les événements en jeu, leur utilisation et l\'événement révélé', () => {
+    const { game, a } = newGame();
+    setEvents(game, ['celebration', 'manaStorm']);
+    state(game, a).res = 5;
+    let view = buildPlayerView(game, a);
+    expect(view.events).toEqual([
+      { id: 'celebration', name: 'Fête', icon: '🎉', art: 'Celebrations', text: 'Chaque joueur pioche une carte.', cost: 2, ongoing: false, used: false },
+      expect.objectContaining({ id: 'manaStorm', cost: null, ongoing: true }),
+    ]);
+    expect(view.eventDeckCount).toBe(14);
+    expect(view.options!.events[0]).toEqual({ usable: true, reason: null, steps: [] });
+    expect(view.options!.events[1]!.usable).toBe(false);
+
+    game.useEvent(a, 0, []);
+    view = buildPlayerView(game, a);
+    expect(view.pending).toMatchObject({ kind: 'event', player: a, event: { id: 'celebration' } });
+    game.resolvePending();
+    expect(buildPlayerView(game, a).events[0]!.used).toBe(true);
   });
 });

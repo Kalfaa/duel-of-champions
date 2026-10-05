@@ -1,5 +1,6 @@
-import { getCard, type CreatureCard, type DamageSource, type Effect, type Step, type StepContext } from './cards';
+import { getCard, type Card, type CreatureCard, type DamageSource, type Effect, type Step, type StepContext } from './cards';
 import { GameRuleError } from './errors';
+import { getEvent, type ActiveEvent } from './events';
 import { FACTIONS, type HeroPower } from './factions';
 import { SeededRandom } from './random';
 import {
@@ -16,6 +17,8 @@ export const HERO_HP = 20;
 export const DRAW_COST = 1;
 export const ROWS = 2;
 export const LANES = 4;
+/** Nombre d'événements en jeu à la fois. */
+export const EVENT_SLOTS = 2;
 const LOG_LIMIT = 120;
 export const AI_PLAYER_ID = 'ai';
 
@@ -50,6 +53,14 @@ export interface Unit {
   attacked: boolean;
 }
 
+export interface DeployBonus {
+  atk: number;
+  ret: number;
+  hp: number;
+}
+
+const NO_DEPLOY_BONUS: Readonly<DeployBonus> = { atk: 0, ret: 0, hp: 0 };
+
 export interface PlacedUnit extends SlotRef {
   unit: Unit;
   owner: PlayerIndex;
@@ -72,6 +83,8 @@ export interface PlayerState extends Record<StatKey, number> {
   heroActionUsed: boolean;
   /** PV ajoutés aux créatures de mêlée déployées ce tour-ci. */
   meleeDeployBonus: number;
+  /** Bonus de la prochaine créature déployée ce tour-ci (événements). */
+  nextDeployBonus: DeployBonus;
   /** Le joueur a quitté la partie (abandon ou déconnexion). */
   left: boolean;
 }
@@ -98,7 +111,7 @@ export type PendingPlay = {
   choices: Choice[];
   /** Cartes retirées de la main par les choix `hand` (secrètes). */
   taken: string[];
-} & ({ kind: 'card'; cardId: string } | { kind: 'power' });
+} & ({ kind: 'card'; cardId: string } | { kind: 'power' } | { kind: 'event'; eventId: string });
 
 /** Riposte due par un défenseur qui a survécu, résolue juste après l'attaque. */
 interface PendingRetaliation {
@@ -144,6 +157,14 @@ export class Game {
   private lastUid = 0;
   private logEntries: LogEntry[] = [];
   private pendingEvents: GameEvent[] = [];
+  /** Pioche d'événements commune aux deux joueurs : le dernier est le dessus. */
+  private eventDeck: string[] = [];
+  /** Événements sortis du jeu, remélangés quand la pioche est vide. */
+  private eventDiscard: string[] = [];
+  /** Événements en jeu, de gauche à droite. */
+  private eventRow: string[] = [];
+  /** Événements déjà utilisés par le joueur actif ce tour-ci (par position). */
+  private eventsUsed: boolean[] = [];
 
   private constructor(
     readonly id: string,
@@ -183,6 +204,10 @@ export class Game {
       lastUid: this.lastUid,
       logEntries: [],
       pendingEvents: [],
+      eventDeck: [...this.eventDeck],
+      eventDiscard: [...this.eventDiscard],
+      eventRow: [...this.eventRow],
+      eventsUsed: [...this.eventsUsed],
     });
     return copy;
   }
@@ -200,6 +225,15 @@ export class Game {
   get hasPendingRetaliation(): boolean { return this.pendingRetaliation !== null; }
   get log(): readonly LogEntry[] { return this.logEntries; }
   get currentIsAi(): boolean { return this.players[this.currentPlayer].isAi; }
+
+  /** Événements en jeu, de gauche à droite (celui de gauche part à la fin du tour). */
+  get events(): readonly string[] { return this.eventRow; }
+  get eventDeckCount(): number { return this.eventDeck.length; }
+
+  /** L'événement à cette position a déjà été utilisé par le joueur actif ce tour-ci. */
+  eventUsed(slot: number): boolean {
+    return this.eventsUsed[slot] ?? false;
+  }
 
   player(pi: PlayerIndex): Readonly<PlayerState> {
     return this.players[pi];
@@ -297,6 +331,19 @@ export class Game {
     return this.stepOptions(pi, this.heroPower(pi).effect.steps, { handIndex: null });
   }
 
+  eventSteps(pi: PlayerIndex, slot: number): StepOptions[] {
+    const event = this.activeEventAt(slot);
+    return event ? this.stepOptions(pi, event.effect.steps, { handIndex: null }) : [];
+  }
+
+  /** Coût d'une carte, augmenté par les événements permanents en jeu. */
+  cardCost(card: Card): number {
+    return card.cost + this.eventRow.reduce((sum, id) => {
+      const event = getEvent(id);
+      return sum + (event.kind === 'ongoing' ? event.costModifier(card) : 0);
+    }, 0);
+  }
+
   /** Raison pour laquelle la carte ne peut pas être jouée, ou null si elle le peut. */
   whyNotPlay(pi: PlayerIndex, handIndex: number): string | null {
     const turnError = this.turnError(pi);
@@ -305,7 +352,7 @@ export class Game {
     const cardId = p.hand[handIndex];
     if (cardId === undefined) return 'Carte introuvable.';
     const card = getCard(cardId);
-    if (p.res < card.cost) return 'Pas assez de ressources.';
+    if (p.res < this.cardCost(card)) return 'Pas assez de ressources.';
     return this.requirementError(pi, card.req) ?? this.stepsError(this.playSteps(pi, handIndex));
   }
 
@@ -325,6 +372,19 @@ export class Game {
     if (heroError) return heroError;
     if (this.players[pi].res < this.heroPower(pi).cost) return 'Pas assez de ressources.';
     return this.stepsError(this.powerSteps(pi));
+  }
+
+  /** Raison pour laquelle l'événement ne peut pas être utilisé, ou null. */
+  whyNotUseEvent(pi: PlayerIndex, slot: number): string | null {
+    const turnError = this.turnError(pi);
+    if (turnError) return turnError;
+    const id = this.eventRow[slot];
+    if (id === undefined) return 'Événement introuvable.';
+    const event = getEvent(id);
+    if (event.kind === 'ongoing') return 'Cet événement est permanent : il ne s\'utilise pas.';
+    if (this.eventsUsed[slot]) return 'Vous avez déjà utilisé cet événement ce tour-ci.';
+    if (this.players[pi].res < event.cost) return 'Pas assez de ressources.';
+    return this.stepsError(this.eventSteps(pi, slot));
   }
 
   /** Raison pour laquelle la créature ne peut ni attaquer ni se déplacer, ou null. */
@@ -386,6 +446,7 @@ export class Game {
       case 'develop': return this.develop(pi, action.choice);
       case 'play': return this.playCard(pi, action.handIndex, action.choices);
       case 'power': return this.usePower(pi, action.choices);
+      case 'event': return this.useEvent(pi, action.slot, action.choices);
       case 'attack': return this.attack(pi, action.uid, action.target);
       case 'move': return this.moveUnit(pi, action.uid, action.to);
       case 'endTurn': return this.endTurn(pi);
@@ -420,7 +481,7 @@ export class Game {
       throw new GameRuleError(card.type === 'creature' ? 'Choisissez un emplacement autorisé.' : 'Choix invalide.');
     }
 
-    p.res -= card.cost;
+    p.res -= this.cardCost(card);
     const [, ...taken] = this.takeFromHand(pi, [handIndex, ...handIndices(choices)]);
     this.pendingPlay = { kind: 'card', player: pi, cardId: card.id, choices: [...choices], taken };
     const target = choices.find(c => c.kind === 'unit' || c.kind === 'hero');
@@ -438,6 +499,11 @@ export class Game {
     const { player: pi, choices, taken } = play;
     if (play.kind === 'power') {
       this.applyEffect(this.heroPower(pi).effect, pi, choices, taken);
+      return;
+    }
+    if (play.kind === 'event') {
+      const event = getEvent(play.eventId);
+      if (event.kind === 'active') this.applyEffect(event.effect, pi, choices, taken);
       return;
     }
     const card = getCard(play.cardId);
@@ -464,6 +530,21 @@ export class Game {
     const target = choices.find(c => c.kind === 'unit' || c.kind === 'hero');
     this.pendingPlay = { kind: 'power', player: pi, choices: [...choices], taken };
     this.addLog(`${this.heroName(pi)} utilise ${power.name}${target ? ' sur ' + this.targetName(target as Target) : ''}.`, 'action', pi);
+  }
+
+  /**
+   * Utilise un événement en jeu : comme une carte, il est payé et révélé, puis résolu par resolvePending().
+   * Chaque joueur peut utiliser chaque événement une fois par tour, qui que soit le joueur qui l'a apporté.
+   */
+  useEvent(pi: PlayerIndex, slot: number, choices: readonly Choice[]): void {
+    this.assertNoError(this.whyNotUseEvent(pi, slot));
+    const event = this.activeEventAt(slot)!;
+    if (!this.validChoices(this.eventSteps(pi, slot), choices)) throw new GameRuleError('Choix invalide.');
+    this.players[pi].res -= event.cost;
+    this.eventsUsed[slot] = true;
+    const taken = this.takeFromHand(pi, handIndices(choices));
+    this.pendingPlay = { kind: 'event', player: pi, eventId: event.id, choices: [...choices], taken };
+    this.addLog(`${this.heroName(pi)} utilise l'événement ${event.name}.`, 'action', pi);
   }
 
   /**
@@ -531,12 +612,13 @@ export class Game {
     this.addLog(`${getCard(found.unit.cardId).name} se déplace.`, 'action', pi);
   }
 
-  /** Fin du tour : Rétablissement des créatures qui n'ont pas attaqué, puis tour adverse. */
+  /** Fin du tour : Rétablissement des créatures qui n'ont pas attaqué, rotation des événements, puis tour adverse. */
   endTurn(pi: PlayerIndex): void {
     this.assertNoError(this.turnError(pi));
     for (const { unit } of this.units(pi)) {
       if (unit.keywords.mending && !unit.attacked) this.healUnit(unit.uid, unit.hpMax - unit.hpCur);
     }
+    this.rotateEvents();
     this.currentPlayer = other(pi);
     this.beginTurn();
   }
@@ -608,10 +690,32 @@ export class Game {
     this.players[pi].meleeDeployBonus += n;
   }
 
+  /** La prochaine créature déployée ce tour-ci reçoit ces bonus (cumulables). */
+  boostNextDeployment(pi: PlayerIndex, bonus: Partial<DeployBonus>): void {
+    const next = this.players[pi].nextDeployBonus;
+    next.atk += bonus.atk ?? 0;
+    next.ret += bonus.ret ?? 0;
+    next.hp += bonus.hp ?? 0;
+  }
+
+  increaseStat(pi: PlayerIndex, stat: StatKey, n: number): void {
+    const p = this.players[pi];
+    p[stat] += n;
+    this.addLog(`${this.heroName(pi)} gagne +${n} en ${STAT_NAMES[stat]} (${p[stat]}).`, 'info', pi);
+  }
+
+  /** Nombre de créatures de la main déployables avec ce budget (coût et conditions). */
+  affordableCreatures(pi: PlayerIndex, budget: number): number {
+    return this.players[pi].hand.filter(id => {
+      const card = getCard(id);
+      return card.type === 'creature' && this.cardCost(card) <= budget && this.requirementError(pi, card.req) === null;
+    }).length;
+  }
+
   /** La créature de la main est jouable avec les ressources actuelles et est du type indiqué. */
   canAffordCreature(pi: PlayerIndex, cardId: string, attackType: AttackType): boolean {
     const card = getCard(cardId);
-    return card.type === 'creature' && card.attackType === attackType && card.cost <= this.players[pi].res
+    return card.type === 'creature' && card.attackType === attackType && this.cardCost(card) <= this.players[pi].res
       && this.requirementError(pi, card.req) === null;
   }
 
@@ -697,7 +801,7 @@ export class Game {
       hp: HERO_HP, maxHp: HERO_HP, m: faction.hero.m, g: faction.hero.g, d: faction.hero.d, res: 0, maxRes: 0,
       deck: this.rng.shuffle(deck), hand: [], grave: [],
       board: Array.from({ length: ROWS }, () => Array<Unit | null>(LANES).fill(null)),
-      heroActionUsed: false, meleeDeployBonus: 0, left: false,
+      heroActionUsed: false, meleeDeployBonus: 0, nextDeployBonus: { ...NO_DEPLOY_BONUS }, left: false,
     };
   }
 
@@ -706,6 +810,7 @@ export class Game {
     this.currentPlayer = first;
     this.draw(first, STARTING_HAND, true);
     this.draw(other(first), STARTING_HAND, true);
+    this.dealEvents();
     this.addLog(`${this.heroName(first)} commence la partie.`, 'turn', null);
     this.beginTurn();
     return this;
@@ -723,6 +828,8 @@ export class Game {
     p.res = p.maxRes;
     p.heroActionUsed = false;
     p.meleeDeployBonus = 0;
+    p.nextDeployBonus = { ...NO_DEPLOY_BONUS };
+    this.eventsUsed = this.eventRow.map(() => false);
     this.addLog(`— Tour de ${this.heroName(pi)} —`, 'turn', null);
     for (const { unit } of this.units(pi)) {
       unit.acted = false;
@@ -741,6 +848,41 @@ export class Game {
     }
     this.draw(pi, 1);
     if (!this.isOver) this.currentPhase = 'action';
+  }
+
+  /** Les événements des deux joueurs sont mélangés ensemble et les deux premiers sont mis en jeu. */
+  private dealEvents(): void {
+    const all = this.players.flatMap(p => FACTIONS[p.faction].events);
+    this.eventDeck = this.rng.shuffle([...all]);
+    while (this.eventRow.length < EVENT_SLOTS) this.eventRow.push(this.drawEvent());
+  }
+
+  /** Pioche un événement ; la pioche vide est reconstituée en remélangeant les événements sortis. */
+  private drawEvent(): string {
+    if (!this.eventDeck.length) {
+      this.eventDeck = this.rng.shuffle(this.eventDiscard);
+      this.eventDiscard = [];
+    }
+    const id = this.eventDeck.pop();
+    if (id === undefined) throw new Error('Aucun événement à piocher.');
+    return id;
+  }
+
+  /** Fin de tour : l'événement de gauche sort du jeu, celui de droite prend sa place et un nouveau arrive à droite. */
+  private rotateEvents(): void {
+    const leaving = this.eventRow.shift();
+    if (leaving === undefined) return;
+    this.eventDiscard.push(leaving);
+    const arriving = this.drawEvent();
+    this.eventRow.push(arriving);
+    this.addLog(`Nouvel événement : ${getEvent(arriving).name}.`, 'info', null);
+  }
+
+  private activeEventAt(slot: number): ActiveEvent | null {
+    const id = this.eventRow[slot];
+    if (id === undefined) return null;
+    const event = getEvent(id);
+    return event.kind === 'active' ? event : null;
   }
 
   private finish(winner: PlayerIndex): void {
@@ -770,12 +912,14 @@ export class Game {
   /** Pose la créature, ou l'ajoute à la pile de la même créature déjà présente sur la case. */
   private deploy(pi: PlayerIndex, card: CreatureCard, slot: SlotRef): void {
     const p = this.players[pi];
-    const bonus = card.attackType === 'melee' ? p.meleeDeployBonus : 0;
+    const next = p.nextDeployBonus;
+    p.nextDeployBonus = { ...NO_DEPLOY_BONUS };
+    const bonus = (card.attackType === 'melee' ? p.meleeDeployBonus : 0) + next.hp;
     const existing = p.board[slot.row]![slot.lane];
     if (existing) {
       existing.stack++;
-      existing.atk += card.atk;
-      existing.ret += card.ret;
+      existing.atk += card.atk + next.atk;
+      existing.ret += card.ret + next.ret;
       existing.hpMax += card.hp + bonus;
       existing.hpCur += card.hp + bonus;
       this.pendingEvents.push({ kind: 'buff', target: { kind: 'unit', uid: existing.uid } });
@@ -783,6 +927,8 @@ export class Game {
       return;
     }
     const unit = this.makeUnit(card, pi);
+    unit.atk += next.atk;
+    unit.ret += next.ret;
     unit.hpMax += bonus;
     unit.hpCur += bonus;
     p.board[slot.row]![slot.lane] = unit;
@@ -878,7 +1024,7 @@ export class Game {
   private turnError(pi: PlayerIndex): string | null {
     if (this.isOver) return 'La partie est terminée.';
     if (this.currentPlayer !== pi) return 'Ce n\'est pas votre tour.';
-    if (this.pendingPlay) return this.pendingPlay.kind === 'card' ? 'Une carte est en cours de résolution.' : 'Un pouvoir est en cours de résolution.';
+    if (this.pendingPlay) return PENDING_ERRORS[this.pendingPlay.kind];
     if (this.pendingRetaliation) return 'Une riposte est en cours.';
     return null;
   }
@@ -907,6 +1053,12 @@ export class Game {
     if (this.logEntries.length > LOG_LIMIT) this.logEntries.shift();
   }
 }
+
+const PENDING_ERRORS: Record<PendingPlay['kind'], string> = {
+  card: 'Une carte est en cours de résolution.',
+  power: 'Un pouvoir est en cours de résolution.',
+  event: 'Un événement est en cours de résolution.',
+};
 
 const handIndices = (choices: readonly Choice[]): number[] =>
   choices.flatMap(c => (c.kind === 'hand' ? [c.index] : []));

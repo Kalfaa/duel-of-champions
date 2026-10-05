@@ -27,6 +27,24 @@ export function RevealedCard({ view }: { view: GameView }) {
     );
   }
 
+  if (pending.kind === 'event') {
+    const { event } = pending;
+    return (
+      <div className={cls('reveal', mine ? 'p0' : 'p1')}>
+        <div className="who">{mine ? 'Vous utilisez l\'événement' : `${who} utilise l'événement`}</div>
+        <div className="card event">
+          <div className="cart" style={artStyle(event.art)}><ArtFallback art={event.art} icon={event.icon} /></div>
+          {event.cost !== null && <div className="cost">{event.cost}</div>}
+          <div className="cbar">
+            <div className="cname">{event.name}</div>
+            <div className="itype">Événement</div>
+            <div className="ctext">{event.text}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { card } = pending;
   const text = [...keywordList(card.keywords).map(k => k.name), card.text].filter(Boolean).join(' · ');
   return (

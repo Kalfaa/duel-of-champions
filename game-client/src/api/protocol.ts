@@ -46,6 +46,8 @@ export type GameAction =
   | { type: 'develop'; choice: DevelopChoice }
   | { type: 'play'; handIndex: number; choices: Choice[] }
   | { type: 'power'; choices: Choice[] }
+  /** Utiliser l'un des deux événements en jeu (0 = celui de gauche, qui part en fin de tour). */
+  | { type: 'event'; slot: number; choices: Choice[] }
   | { type: 'attack'; uid: number; target: Target }
   | { type: 'move'; uid: number; to: SlotRef }
   | { type: 'endTurn' };
@@ -86,6 +88,10 @@ export interface HeroView {
   name: string;
   icon: string;
   art: string;
+  /** Puissance, Magie et Destinée de départ du héros. */
+  base: Record<StatKey, number>;
+  /** Écoles de magie utilisées par le héros (Lumière, Ténèbres, Feu…). */
+  schools: string[];
   power: { name: string; cost: number; text: string };
 }
 
@@ -118,7 +124,23 @@ export interface StepView {
   distinctFrom: number | null;
 }
 
+/** Événement en jeu, commun aux deux joueurs. */
+export interface EventView {
+  id: string;
+  name: string;
+  icon: string;
+  art: string;
+  text: string;
+  /** Coût d'utilisation ; null pour un événement permanent. */
+  cost: number | null;
+  ongoing: boolean;
+  /** Déjà utilisé par le joueur actif ce tour-ci. */
+  used: boolean;
+}
+
 export interface HandOption {
+  /** Coût réel de la carte, modifié par les événements permanents. */
+  cost: number;
   playable: boolean;
   reason: string | null;
   steps: StepView[];
@@ -135,6 +157,8 @@ export interface TurnOptions {
   heroAction: { available: boolean; reason: string | null; drawReason: string | null };
   hand: HandOption[];
   power: { usable: boolean; reason: string | null; steps: StepView[] };
+  /** Un par événement en jeu, dans le même ordre. */
+  events: { usable: boolean; reason: string | null; steps: StepView[] }[];
   units: UnitOption[];
   canEndTurn: boolean;
 }
@@ -147,7 +171,7 @@ export interface LogEntry {
 
 /** Carte jouée ou pouvoir du héros utilisé, affiché en grand le temps de sa résolution. */
 export type PendingView = { player: PlayerIndex; choices: Choice[] }
-  & ({ kind: 'card'; card: CardView } | { kind: 'power'; power: HeroView['power'] });
+  & ({ kind: 'card'; card: CardView } | { kind: 'power'; power: HeroView['power'] } | { kind: 'event'; event: EventView });
 
 export interface GameView {
   gameId: string;
@@ -159,6 +183,9 @@ export interface GameView {
   /** Carte qui vient d'être jouée et qui n'est pas encore résolue. */
   pending: PendingView | null;
   players: [PlayerView, PlayerView];
+  /** Les deux événements en jeu : celui de gauche part à la fin du tour. */
+  events: EventView[];
+  eventDeckCount: number;
   log: LogEntry[];
   options: TurnOptions | null;
 }
