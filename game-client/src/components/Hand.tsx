@@ -40,7 +40,7 @@ export function Hand({ view, selection, highlights, drawn = null, onClick, onIns
             onClick={() => onClick({ kind: 'hand', index: i })}
             onContextMenu={onRightClick(() => onInspect({ kind: 'hand', index: i }))}
           >
-            <CardFace card={c} player={me} cost={options?.hand[i]?.cost} />
+            <CardFace card={c} player={me} cost={options?.hand[i]?.cost} details />
           </div>
         );
       })}

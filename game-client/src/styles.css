@@ -95,17 +95,20 @@ button:disabled{opacity:.4;cursor:default}
 .herocard.ready:not(.target){border-color:#7fff7f;animation:ready-glow 1s infinite;box-shadow:0 0 18px #5f5}
 @keyframes ready-glow{50%{box-shadow:0 0 5px #5f5}}
 .hero-choice{display:inline-flex;align-items:center;gap:6px}
-/* Fenêtre des actions du héros : portrait à gauche, choix à droite */
-.chooser-box.hero-menu{flex-direction:row;align-items:stretch;gap:18px}
-.hero-menu-portrait{position:relative;width:200px;flex:none;aspect-ratio:.75;align-self:center;border-radius:8px;border:3px solid var(--gold-l);background:#241a0e center 15%/cover no-repeat;box-shadow:0 0 18px #f3d58a66,0 6px 16px #000;display:flex;align-items:center;justify-content:center;font-size:70px}
-.hero-menu-side{display:flex;flex-direction:column;gap:10px;min-width:0;justify-content:center}
-.hero-menu-side .chooser-title{text-align:left}
+/* Panneau des actions du héros : à gauche du plateau, sans voile, pour garder le champ de bataille visible */
+.hero-menu{position:fixed;left:12px;top:calc(78px + (100vh - 284px) / 2);transform:translateY(-50%);z-index:30;width:250px;max-height:calc(100vh - 300px);overflow-y:auto;
+  display:flex;flex-direction:column;gap:10px;padding:14px;background:#241a0ef2;border:2px solid var(--gold-l);border-radius:10px;box-shadow:0 0 18px #f3d58a44,0 8px 24px #000}
+.hero-menu-head{display:flex;align-items:center;gap:12px}
+.hero-menu-head .chooser-title{text-align:left;font-size:15px}
+.hero-menu-portrait{position:relative;width:64px;flex:none;aspect-ratio:.75;border-radius:6px;border:2px solid var(--gold-l);background:#241a0e center 15%/cover no-repeat;box-shadow:0 3px 8px #000;display:flex;align-items:center;justify-content:center;font-size:30px}
+.hero-menu-portrait .schools{display:none}
+.hero-menu-portrait .herohp{width:26px;height:26px;left:-6px;bottom:-6px;font-size:13px;border-width:2px}
+.hero-menu .hero-power-text{text-align:left}
+.hero-menu .chooser-cancel{align-self:flex-start}
 .hero-menu-options{display:flex;flex-direction:column;gap:8px}
 .hero-menu-options button{background:#3a2a16;color:#f0e0b0;border:1px solid #8a6a3a;border-radius:6px;font:inherit;text-align:left}
 .hero-menu-options button:hover:not(:disabled){border-color:#ff0;box-shadow:0 0 10px #ff0a}
 .hero-menu-options button:disabled{opacity:.4;cursor:default}
-.hero-menu-side .hero-power-text{text-align:left}
-.hero-menu-side .chooser-cancel{align-self:flex-start}
 .hero-choice .sb{width:22px;height:22px;font-size:12px}
 .chooser-options button:disabled{opacity:.4;cursor:default;box-shadow:none;border-color:#8a6a3a}
 .hero-power-text{max-width:460px;font-size:13px;color:#e8dcc0;text-align:center;line-height:1.3}
@@ -146,6 +149,18 @@ button:disabled{opacity:.4;cursor:default}
 .card:hover{transform:translateY(-22px) scale(1.06);z-index:10}
 .card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
 .card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-28px) scale(1.06);z-index:11}
+/* Main : type et texte de la carte, révélés seulement au survol, la carte étant alors agrandie pour être lisible */
+.hand .card .itype,.hand .card .ctext{display:none}
+@media (hover:hover) and (min-width:901px){
+  .hand .card{transform-origin:bottom center}
+  .hand .card:first-child{transform-origin:bottom left}
+  .hand .card:hover{transform:translateY(-14px) scale(1.8);z-index:20;box-shadow:0 0 0 1px #000,0 10px 30px #000}
+  .hand .card:hover .cart{bottom:100px}
+  .hand .card:hover .cbar{height:100px;flex-direction:column;justify-content:flex-start;gap:2px;padding:4px 5px;overflow:hidden}
+  .hand .card:hover .ust{bottom:104px}
+  .hand .card:hover .itype{display:block;font-size:6.5px;text-align:center}
+  .hand .card:hover .ctext{display:block;font-size:7px;color:#e8dcc0;text-align:center;line-height:1.2}
+}
 .iart{width:92px;flex:none;border-radius:4px;border:2px solid #6b5230;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
 .itext{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;overflow:hidden}
 .iname{font-weight:bold;color:#f5e6c8;font-size:14px}
@@ -356,9 +371,11 @@ button:disabled{opacity:.4;cursor:default}
   .grave-details{width:100%;order:-1}
   .grave-details .iart{height:110px}
   .grave-cards{padding-top:10px}
-  .chooser-box.hero-menu{gap:10px;padding:12px}
-  .hero-menu-portrait{width:110px;font-size:40px}
-  .hero-menu-side .chooser-title{font-size:14px}
+  /* Pas de place à côté du plateau : le panneau du héros se pose sur la main, en bas */
+  .hero-menu{left:6px;right:6px;top:auto;bottom:6px;transform:none;width:auto;max-height:60dvh;gap:8px;padding:10px}
+  .hero-menu-portrait{width:44px;font-size:22px}
+  .hero-menu-head .chooser-title{font-size:14px}
+  .hero-menu-options{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .hero-menu-options button{padding:7px 10px;font-size:13px}
   .hero-power-text{font-size:12px}
   .turn-banner-title{font-size:28px;letter-spacing:2px}
@@ -378,8 +395,18 @@ button:disabled{opacity:.4;cursor:default}
 /* Carte d'événement : format paysage, illustration pleine et nom en bas */
 .event-card{--ew:calc(var(--sw) * 1.15);position:relative;width:var(--ew);height:calc(var(--ew) * .62);border-radius:5px;border:2px solid #3f8f80;background:#0b1816;box-shadow:0 4px 10px #000c;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s,filter .15s}
 .event-card .ev-art{position:absolute;inset:0;background:#1c3a36 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:30px}
-.event-card .ev-name{position:absolute;left:0;right:0;bottom:0;padding:10px 4px 2px;background:linear-gradient(transparent,#000d 45%);color:#e8f6f2;font-size:11px;font-weight:bold;text-align:center;line-height:1.05;text-shadow:0 1px 2px #000}
+.event-card .ev-info{position:absolute;left:0;right:0;bottom:0;padding:10px 4px 2px;background:linear-gradient(transparent,#000d 45%);text-align:center;text-shadow:0 1px 2px #000}
+.event-card .ev-name{color:#e8f6f2;font-size:11px;font-weight:bold;line-height:1.05}
 .event-card:hover{transform:translateY(-4px) scale(1.05);z-index:5}
+/* Texte de l'événement : révélé seulement au survol, l'événement étant alors agrandi pour être lisible */
+.event-card .ev-text{display:none}
+@media (hover:hover) and (min-width:901px){
+  .event-card{transform-origin:bottom center}
+  .events .event-card:hover{transform:scale(2);z-index:20;box-shadow:0 0 0 1px #000,0 10px 30px #000}
+  .event-card:hover .ev-info{padding:14px 5px 3px;background:linear-gradient(transparent,#000e 22%)}
+  .event-card:hover .ev-name{font-size:8px}
+  .event-card:hover .ev-text{display:block;margin-top:2px;font-size:6.5px;color:#e8dcc0;line-height:1.2}
+}
 .event-card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
 .event-card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-4px) scale(1.05)}
 /* Déjà utilisé par le joueur actif ce tour-ci */
@@ -404,7 +431,8 @@ button:disabled{opacity:.4;cursor:default}
   .events-deck{width:20px;height:30px;font-size:10px;border-width:1px}
   .event-card{--ew:calc(var(--sw) * 1.3);border-width:1px}
   .event-card .ev-art{font-size:18px}
-  .event-card .ev-name{font-size:8px;padding-top:6px}
+  .event-card .ev-info{padding-top:6px}
+  .event-card .ev-name{font-size:8px}
   .ev-tag{font-size:6px;padding:0 2px}
 }
 /* Événement permanent : pas de rond de coût, le nom est centré */

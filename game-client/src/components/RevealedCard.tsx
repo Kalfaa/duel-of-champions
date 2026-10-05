@@ -1,5 +1,5 @@
 import type { GameView } from '../api/protocol';
-import { ArtFallback, artStyle, cls, keywordList, ReqBadges, StatBadges, typeLabel } from './common';
+import { ArtFallback, artStyle, cardText, cls, ReqBadges, StatBadges, typeLabel } from './common';
 
 /** Carte jouée ou pouvoir du héros utilisé, affiché en grand le temps que le serveur le résolve. */
 export function RevealedCard({ view }: { view: GameView }) {
@@ -46,7 +46,7 @@ export function RevealedCard({ view }: { view: GameView }) {
   }
 
   const { card } = pending;
-  const text = [...keywordList(card.keywords).map(k => k.name), card.text].filter(Boolean).join(' · ');
+  const text = cardText(card);
   return (
     <div className={cls('reveal', mine ? 'p0' : 'p1')}>
       <div className="who">{mine ? 'Vous jouez' : `${who} joue`}</div>

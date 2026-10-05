@@ -24,6 +24,14 @@ describe('GameScreen', () => {
     expect(html).toContain('title="Historique de la partie"');
   });
 
+  it('inclut le type et le texte des cartes en main, pour les lire au survol', () => {
+    const html = render(view({
+      players: [player({ hand: [card({ name: 'Boule de feu', type: 'spell', school: 'Feu', text: 'Inflige 3 dégâts.' })], handCount: 1 }), player({ hand: null })],
+    }));
+    expect(html).toContain('<div class="itype">Sort – Feu</div>');
+    expect(html).toContain('<div class="ctext">Inflige 3 dégâts.</div>');
+  });
+
   it('remplit les ronds de vie selon les PV restants', () => {
     const board = [[unit(1, { hpCur: 1, hpMax: 4 }), null, null, null], [null, null, null, null]];
     const html = render(view({
@@ -74,6 +82,9 @@ describe('GameScreen', () => {
         ui={{ selection: { kind: 'heroMenu' }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
     );
     for (const label of ['+1 Puissance', '+1 Magie', '+1 Destinée', '🂠 Piocher']) expect(menu).toContain(label);
+    // Panneau latéral sans voile : le champ de bataille reste visible pendant le choix
+    expect(menu).toContain('class="hero-menu"');
+    expect(menu).not.toContain('class="chooser"');
     expect(menu).toContain('disabled="" title="Pas assez de ressources."');
     const used = render(view({ options: mainOptions({ heroAction: { available: false, reason: 'Votre héros a déjà agi ce tour-ci.', drawReason: null } }) }));
     expect(used).not.toContain('ready');
@@ -160,6 +171,8 @@ describe('GameScreen', () => {
     expect(html).toContain('Tempête de mana');
     expect(html).toContain('<div class="ev-tag">Permanent</div>');
     expect(html).toContain('title="Quitte le jeu à la fin du tour"');
+    // Texte inclus pour être lu au survol
+    expect(html).toContain('<div class="ev-text">Chaque joueur pioche une carte.</div>');
   });
 
   it('montre le coût augmenté d\'une carte de la main', () => {

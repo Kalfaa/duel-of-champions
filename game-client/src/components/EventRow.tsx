@@ -33,7 +33,10 @@ export function EventRow({ view, selection, onClick, onInspect }: Props) {
               <div className="ev-art" style={artStyle(e.art)}><ArtFallback art={e.art} icon={e.icon} /></div>
               {e.cost === null ? <div className="ev-tag">Permanent</div> : <div className="cost">{e.cost}</div>}
               {slot === 0 && <div className="ev-leaving">⌛</div>}
-              <div className="ev-name">{e.name}</div>
+              <div className="ev-info">
+                <div className="ev-name">{e.name}</div>
+                <div className="ev-text">{e.text}</div>
+              </div>
             </div>
           );
         })}

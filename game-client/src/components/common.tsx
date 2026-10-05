@@ -111,15 +111,26 @@ export function ArtFallback({ art, icon }: { art: string | null | undefined; ico
   return art ? null : <span className="emoji">{icon}</span>;
 }
 
-/** Face d'une carte en petit (main, cimetière) : illustration, coût, conditions, caractéristiques et nom. */
-export function CardFace({ card, player, cost = card.cost }: { card: CardView; player?: PlayerView; cost?: number }) {
+/** Texte d'une carte : ses capacités puis son effet. */
+export const cardText = (c: CardView): string => [...keywordList(c.keywords).map(k => k.name), c.text].filter(Boolean).join(' · ');
+
+/**
+ * Face d'une carte en petit (main, cimetière) : illustration, coût, conditions, caractéristiques et nom.
+ * Avec `details`, le type et le texte sont aussi rendus (révélés en CSS au survol de la carte agrandie).
+ */
+export function CardFace({ card, player, cost = card.cost, details = false }: { card: CardView; player?: PlayerView; cost?: number; details?: boolean }) {
+  const text = details ? cardText(card) : '';
   return (
     <>
       <div className="cart" style={artStyle(card.art)}><ArtFallback art={card.art} icon={card.icon} /></div>
       <div className={cls('cost', cost > card.cost && 'up')} title={cost > card.cost ? `Coût augmenté par un événement (${card.cost} de base)` : undefined}>{cost}</div>
       <div className="creqs"><ReqBadges req={card.req} player={player} /></div>
       {card.type === 'creature' && <StatBadges atk={card.atk ?? 0} ret={card.ret ?? 0} hp={card.hp ?? 0} />}
-      <div className="cbar"><div className="cname">{card.name}</div></div>
+      <div className="cbar">
+        <div className="cname">{card.name}</div>
+        {details && <div className="itype">{typeLabel(card)}</div>}
+        {text && <div className="ctext">{text}</div>}
+      </div>
     </>
   );
 }
