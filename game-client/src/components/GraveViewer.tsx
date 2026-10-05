@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CardView, GameView, PlayerIndex } from '../api/protocol';
 import type { Inspect } from './CardInspector';
 import { CardFace, cls, onRightClick } from './common';
-import { CardDetails } from './InfoPanel';
+import { CardDetails } from './CardDetails';
 
 interface Props {
   view: GameView;

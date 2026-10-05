@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameSocket, openBrowserSocket, type SocketLike } from '../api/game-socket';
 import type { FactionId, GameView } from '../api/protocol';
+import { countDrawnCards, type Draw } from '../game/draws';
 import { createFlashes, mergeFlashes, removeFlashes, type FlashMap } from '../game/flashes';
 import { findRemovedUnits, type Ghost } from '../game/ghosts';
 import { EMPTY_UI, handleClick, type Click, type UiState } from '../game/selection';
@@ -16,6 +17,8 @@ const ATTACK_DURATION_MS = 500;
 const DEATH_DURATION_MS = 700;
 /** Durée d'affichage du bandeau de changement de tour, alignée avec l'animation CSS « turn-banner ». */
 const TURN_BANNER_DURATION_MS = 1600;
+/** Durée maximale de l'animation des cartes piochées (vol depuis la bibliothèque, décalé carte par carte). */
+const DRAW_DURATION_MS = 1500;
 
 /** Créature en train de frapper : une attaque, ou la riposte d'un défenseur. */
 export interface Lunge {
@@ -34,6 +37,8 @@ export interface GameController {
   ghosts: readonly Ghost[];
   /** Bandeau annonçant le joueur qui vient de prendre la main, le temps de son animation. */
   turnBanner: TurnBanner | null;
+  /** Cartes qui viennent d'être piochées, le temps de leur animation. */
+  drawn: Draw | null;
   connectionError: string | null;
   start(mode: GameMode, faction: FactionId): void;
   leave(): void;
@@ -49,6 +54,8 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
   const [ghosts, setGhosts] = useState<readonly Ghost[]>([]);
   const [turnBanner, setTurnBanner] = useState<TurnBanner | null>(null);
   const bannerIdRef = useRef(0);
+  const [drawn, setDrawn] = useState<Draw | null>(null);
+  const drawIdRef = useRef(0);
   const lastViewRef = useRef<GameView | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const socketRef = useRef<GameSocket | null>(null);
@@ -61,6 +68,7 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
     setAttacking(null);
     setGhosts([]);
     setTurnBanner(null);
+    setDrawn(null);
     lastViewRef.current = null;
   }, []);
 
@@ -79,6 +87,9 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
         case 'state': {
           const removed = findRemovedUnits(lastViewRef.current, message.view);
           const taker = turnTaker(lastViewRef.current, message.view);
+          const prevView = lastViewRef.current;
+          const mine = countDrawnCards(prevView, message.view);
+          const theirs = countDrawnCards(prevView, message.view, message.view.you === 0 ? 1 : 0);
           lastViewRef.current = message.view;
           setView(message.view);
           setScreen('game');
@@ -93,6 +104,11 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
             const banner: TurnBanner = { id: ++bannerIdRef.current, player: taker };
             setTurnBanner(banner);
             setTimeout(() => setTurnBanner(current => (current === banner ? null : current)), TURN_BANNER_DURATION_MS);
+          }
+          if (mine > 0 || theirs > 0) {
+            const draw: Draw = { id: ++drawIdRef.current, mine, theirs };
+            setDrawn(draw);
+            setTimeout(() => setDrawn(current => (current === draw ? null : current)), DRAW_DURATION_MS);
           }
           if (removed.length) {
             setGhosts(current => [...current, ...removed]);
@@ -138,5 +154,5 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
 
   useEffect(() => () => socketRef.current?.close(), []);
 
-  return { screen, view, ui, flashes, attacking, ghosts, turnBanner, connectionError, start, leave, click };
+  return { screen, view, ui, flashes, attacking, ghosts, turnBanner, drawn, connectionError, start, leave, click };
 }

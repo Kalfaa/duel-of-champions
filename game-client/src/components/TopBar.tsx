@@ -6,6 +6,7 @@ interface Props {
   view: GameView;
   onClick(click: Click): void;
   onMenu(): void;
+  onLog(): void;
 }
 
 function Side({ view, player, side }: { view: GameView; player: PlayerIndex; side: 'p0' | 'p1' }) {
@@ -26,12 +27,13 @@ function Side({ view, player, side }: { view: GameView; player: PlayerIndex; sid
   );
 }
 
-export function TopBar({ view, onClick, onMenu }: Props) {
+export function TopBar({ view, onClick, onMenu, onLog }: Props) {
   const opponent: PlayerIndex = view.you === 0 ? 1 : 0;
   const label = view.phase === 'over' ? 'Fin' : view.current !== view.you ? 'Tour adverse' : 'Fin du tour';
   return (
     <div className="topbar">
       <button className="menubtn" title="Menu" onClick={onMenu}>⚙</button>
+      <button className="logbtn" title="Historique de la partie" onClick={onLog}>📜</button>
       <Side view={view} player={view.you} side="p0" />
       <button className="endturn" onClick={() => onClick({ kind: 'endTurn' })} disabled={!view.options?.canEndTurn}>
         {label}<small>Tour {Math.ceil(view.turn / 2)}</small>

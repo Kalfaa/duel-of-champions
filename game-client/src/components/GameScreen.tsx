@@ -8,14 +8,15 @@ import { Battlefield } from './Battlefield';
 import { CardInspector, resolveInspect, type Inspect } from './CardInspector';
 import { Chooser } from './Chooser';
 import { GraveViewer } from './GraveViewer';
-import { GameLog } from './GameLog';
 import { Hand } from './Hand';
 import { HeroMenu } from './HeroMenu';
-import { InfoPanel, type Hover } from './InfoPanel';
+import { LogPanel } from './LogPanel';
+import { OpponentHand } from './OpponentHand';
 import { RevealedCard } from './RevealedCard';
 import { TopBar } from './TopBar';
 import { TurnBannerView } from './TurnBannerView';
 import type { TurnBanner } from '../game/turns';
+import type { Draw } from '../game/draws';
 
 interface Props {
   view: GameView;
@@ -24,6 +25,7 @@ interface Props {
   attacking: Lunge | null;
   ghosts: readonly Ghost[];
   turnBanner?: TurnBanner | null;
+  drawn?: Draw | null;
   onClick(click: Click): void;
   onLeave(): void;
 }
@@ -31,10 +33,10 @@ interface Props {
 const pendingKey = (pending: NonNullable<GameView['pending']>): string =>
   pending.kind === 'card' ? pending.card.id : pending.kind === 'event' ? pending.event.id : 'power';
 
-export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = null, onClick, onLeave }: Props) {
-  const [hover, setHover] = useState<Hover | null>(null);
+export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = null, drawn = null, onClick, onLeave }: Props) {
   const [graveOf, setGraveOf] = useState<PlayerIndex | null>(null);
   const [inspect, setInspect] = useState<Inspect | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
   // La carte inspectée peut disparaître (créature détruite, carte jouée) : l'inspection se ferme alors d'elle-même
   const inspecting = inspect !== null && resolveInspect(view, inspect) !== null;
   const highlights = useMemo(() => computeHighlights(view, ui.selection), [view, ui.selection]);
@@ -47,6 +49,7 @@ export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = 
       }
       if (e.key === 'Escape') {
         setGraveOf(null);
+        setLogOpen(false);
         onClick({ kind: 'cancel' });
       }
       if (e.key === ' ') {
@@ -74,15 +77,15 @@ export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = 
   return (
     <>
       <div className="game">
-        <TopBar view={view} onClick={onClick} onMenu={confirmLeave} />
-        <Battlefield view={view} selection={ui.selection} highlights={highlights} flashes={flashes} attacking={attacking} ghosts={ghosts} onClick={onClick} onHover={setHover} onInspect={setInspect} onOpenGrave={setGraveOf} />
+        <TopBar view={view} onClick={onClick} onMenu={confirmLeave} onLog={() => setLogOpen(open => !open)} />
+        <Battlefield view={view} selection={ui.selection} highlights={highlights} flashes={flashes} attacking={attacking} ghosts={ghosts} onClick={onClick} onInspect={setInspect} onOpenGrave={setGraveOf} />
         <div className="bottom">
-          <Hand view={view} selection={ui.selection} highlights={highlights} onClick={onClick} onHover={setHover} onInspect={setInspect} />
-          <InfoPanel view={view} message={ui.message} hover={hover} onClick={onClick} onInspect={setInspect} />
-          <GameLog log={view.log} you={view.you} />
+          <Hand view={view} selection={ui.selection} highlights={highlights} drawn={drawn} onClick={onClick} onInspect={setInspect} />
+          <OpponentHand view={view} drawn={drawn} />
         </div>
       </div>
       {turnBanner && <TurnBannerView key={turnBanner.id} view={view} banner={turnBanner} />}
+      {logOpen && <LogPanel view={view} onClose={() => setLogOpen(false)} />}
       {graveOf !== null && <GraveViewer view={view} player={graveOf} onClose={() => setGraveOf(null)} onInspect={setInspect} />}
       <HeroMenu view={view} selection={ui.selection} onClick={onClick} />
       <Chooser view={view} selection={ui.selection} onClick={onClick} onInspect={setInspect} />

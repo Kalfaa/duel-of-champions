@@ -1,19 +1,17 @@
 import type { GameView } from '../api/protocol';
 import type { Click, Selection } from '../game/selection';
 import type { Inspect } from './CardInspector';
-import type { Hover } from './InfoPanel';
 import { ArtFallback, artStyle, cls, onRightClick } from './common';
 
 interface Props {
   view: GameView;
   selection: Selection;
   onClick(click: Click): void;
-  onHover(hover: Hover): void;
   onInspect(target: Inspect): void;
 }
 
 /** Les deux événements en jeu, communs aux deux joueurs ; celui de gauche quitte le jeu à la fin du tour. */
-export function EventRow({ view, selection, onClick, onHover, onInspect }: Props) {
+export function EventRow({ view, selection, onClick, onInspect }: Props) {
   // Un serveur pas encore mis à jour n'envoie pas les événements : la zone est alors masquée
   const events = view.events ?? [];
   if (!events.length) return null;
@@ -30,7 +28,6 @@ export function EventRow({ view, selection, onClick, onHover, onInspect }: Props
               className={cls('event-card', usable && 'playable', selected && 'sel', e.used && 'used')}
               title={slot === 0 ? 'Quitte le jeu à la fin du tour' : undefined}
               onClick={() => onClick({ kind: 'event', slot })}
-              onMouseEnter={() => onHover({ kind: 'event', slot })}
               onContextMenu={onRightClick(() => onInspect({ kind: 'event', slot }))}
             >
               <div className="ev-art" style={artStyle(e.art)}><ArtFallback art={e.art} icon={e.icon} /></div>

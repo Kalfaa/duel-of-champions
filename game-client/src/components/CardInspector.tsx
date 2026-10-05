@@ -1,9 +1,13 @@
-import type { CardView, EventView, GameView, PlayerView, UnitView } from '../api/protocol';
-import type { Hover } from './InfoPanel';
+import type { CardView, EventView, GameView, PlayerIndex, PlayerView, UnitView } from '../api/protocol';
 import { ArtFallback, artStyle, cls, hpFillStyle, keywordList, onRightClick, ReqBadges, SchoolBadges, schoolIcon, StatBadges, typeLabel } from './common';
 
-/** Carte à inspecter : un élément du plateau ou de la main (comme au survol), ou une carte isolée (cimetière, choix). */
-export type Inspect = Hover | { kind: 'card'; card: CardView };
+/** Carte à inspecter : un élément de la main ou du plateau, un événement en jeu, ou une carte isolée (cimetière, choix). */
+export type Inspect =
+  | { kind: 'hand'; index: number }
+  | { kind: 'unit'; uid: number }
+  | { kind: 'hero'; player: PlayerIndex }
+  | { kind: 'event'; slot: number }
+  | { kind: 'card'; card: CardView };
 
 type Inspected =
   | { kind: 'card'; card: CardView; owner?: PlayerView; unit?: UnitView }

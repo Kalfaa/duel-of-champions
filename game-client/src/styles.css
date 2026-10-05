@@ -111,8 +111,8 @@ button:disabled{opacity:.4;cursor:default}
 .hero-power-text{max-width:460px;font-size:13px;color:#e8dcc0;text-align:center;line-height:1.3}
 .piles{display:flex;gap:10px}
 .pile{width:62px;height:82px;border-radius:5px;position:relative;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;color:#fff;text-shadow:0 0 4px #000}
-.pile.deck{background:radial-gradient(circle at 50% 45%,#ffb347,#c8401a 50%,#5a1006);border:2px solid var(--gold);box-shadow:3px 3px 0 #3a1a08,6px 6px 0 #26110a,0 6px 12px #000}
-.pile.deck::before{content:"⚔";position:absolute;top:6px;font-size:16px;color:#fff3d0aa}
+/* Bibliothèque : dos de carte de la faction, avec l'épaisseur de la pile */
+.pile.deck{background:#1a120a center/cover no-repeat;border:2px solid #1a120a;box-shadow:2px 2px 0 #0d0905,4px 4px 0 #1a120a,6px 6px 0 #0d0905,0 6px 12px #000}
 .pile.grave{background:#0006 center 20%/cover no-repeat;border:2px solid #6a6258;filter:grayscale(.8) brightness(.8)}
 .pile small{position:absolute;bottom:2px;font-size:10px;color:#ddd}
 .pile .cnt{background:#000a;border-radius:10px;padding:0 6px;font-size:14px}
@@ -146,10 +146,6 @@ button:disabled{opacity:.4;cursor:default}
 .card:hover{transform:translateY(-22px) scale(1.06);z-index:10}
 .card.playable{border-color:#7fff7f;box-shadow:0 0 12px #7fff7f}
 .card.sel{border-color:#ff0;box-shadow:0 0 18px #ff0;transform:translateY(-28px) scale(1.06);z-index:11}
-.info{width:370px;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;flex:none;box-shadow:0 0 18px #000}
-.ihead{position:relative;background:linear-gradient(#4a3a22,#241a0c);padding:5px 30px;font-size:12px;color:var(--gold-l);text-align:center;min-height:30px;display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
-.ihead button{padding:2px 7px;font-size:11px}
-.izoom{position:absolute;top:50%;right:4px;transform:translateY(-50%);padding:1px 5px;font-size:13px;line-height:1.2}
 .iart{width:92px;flex:none;border-radius:4px;border:2px solid #6b5230;background:#241a0e center 20%/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:40px}
 .itext{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;overflow:hidden}
 .iname{font-weight:bold;color:#f5e6c8;font-size:14px}
@@ -317,8 +313,8 @@ button:disabled{opacity:.4;cursor:default}
   .herocol .power{display:none}
   .piles{gap:4px}
   .pile{width:25px;height:30px;font-size:12px}
-  .pile small,.pile.deck::before{display:none}
-  .pile.deck{box-shadow:2px 2px 0 #3a1a08,0 3px 6px #000}
+  .pile small{display:none}
+  .pile.deck{box-shadow:2px 2px 0 #0d0905,0 3px 6px #000}
   .pile .cnt{font-size:10px;padding:0 3px}
 
   /* Créatures du plateau en petit */
@@ -334,8 +330,6 @@ button:disabled{opacity:.4;cursor:default}
   /* Bas d'écran : infos puis main, le journal est masqué faute de place */
   .bottom{flex-direction:column;align-items:stretch;gap:6px;padding:0 6px 6px}
   .log{display:none}
-  .info{width:100%;order:-1}
-  .ihead{font-size:11px;min-height:24px;padding:3px 28px}
   .hand{--cw:70px;flex:none;height:128px;padding:0 0 2px}
   .hand .card{width:var(--cw);height:calc(var(--cw) * 1.64)}
   .card .cart{bottom:24px;font-size:26px}
@@ -377,8 +371,7 @@ button:disabled{opacity:.4;cursor:default}
 }
 
 /* ---------- Événements en jeu (communs aux deux joueurs) ---------- */
-.board{display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:1}
-.events{display:flex;align-items:center;gap:12px}
+.events{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
 .events-cards{display:flex;gap:14px}
 /* Pioche d'événements : petite pile avec le nombre restant */
 .events-deck{width:30px;height:44px;border-radius:4px;border:2px solid #5fb0a0;background:linear-gradient(#1c3a36,#0b1816);box-shadow:2px 2px 0 #0b1816,0 3px 6px #000;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;color:#cfeee8}
@@ -406,7 +399,6 @@ button:disabled{opacity:.4;cursor:default}
 .icard.event .icard-box{position:relative;left:auto;right:auto;bottom:auto;margin:12px 14px 14px;min-height:0;max-height:none}
 
 @media (max-width:900px){
-  .board{gap:6px}
   .events{gap:6px}
   .events-cards{gap:8px}
   .events-deck{width:20px;height:30px;font-size:10px;border-width:1px}
@@ -417,3 +409,68 @@ button:disabled{opacity:.4;cursor:default}
 }
 /* Événement permanent : pas de rond de coût, le nom est centré */
 .icard.event:not(:has(.icard-cost)) .icard-name{padding-left:16px}
+
+/* ---------- Champ de bataille façon Duel of Champions ---------- */
+.field{flex-direction:column;gap:8px}
+/* Héros et plateau inclinés en perspective : le haut de la table s'éloigne */
+.table{display:flex;align-items:center;justify-content:center;gap:26px;position:relative;z-index:1;transform:perspective(1500px) rotateX(14deg);transform-origin:50% 100%}
+/* Cases : fond sombre translucide, bord fin, losange au centre */
+.slot{border:1px solid #e0d4b84a;border-radius:2px;background:linear-gradient(#00000066,#00000038);box-shadow:inset 0 0 12px #0008}
+.slot::before{width:30%;border:1px solid #e0d4b83a;background:#ffffff05}
+.slot.target{border-width:2px}
+/* Couloir central : petit cadre avec son cercle */
+.lane{position:relative}
+.lane::after{content:"";position:absolute;inset:24% 3px;border:1px solid #e0d4b830;border-radius:2px;background:#00000040;z-index:-1}
+.lane::before{width:26px;height:26px;border-width:1px}
+/* Fond : les deux décors de faction se fondent au centre et se prolongent sous la main, assombris pour faire ressortir la table */
+.half{width:62%;bottom:-420px;opacity:1;filter:brightness(.5) saturate(.85) contrast(1.05)}
+.half.l{-webkit-mask-image:linear-gradient(90deg,#000 35%,transparent 92%);mask-image:linear-gradient(90deg,#000 35%,transparent 92%)}
+.half.r{-webkit-mask-image:linear-gradient(270deg,#000 35%,transparent 92%);mask-image:linear-gradient(270deg,#000 35%,transparent 92%)}
+/* Lumière chaude au-dessus de la table, qui respire doucement */
+.field::before{content:"";position:absolute;inset:0 0 -420px;pointer-events:none;
+  background:radial-gradient(ellipse 38% 48% at 50% 42%,#f3d58a26,transparent 70%),radial-gradient(ellipse 70% 60% at 50% 45%,#c9a45a14,transparent 75%);
+  animation:table-light 9s ease-in-out infinite alternate}
+@keyframes table-light{from{opacity:.75}to{opacity:1}}
+/* Vignettage sur les bords, ombre sous la barre du haut et assombrissement progressif vers la main */
+.field::after{bottom:-420px;background:
+  linear-gradient(#000b,transparent 9%),
+  linear-gradient(transparent 45%,#0009 70%,#000c),
+  radial-gradient(ellipse 75% 70% at 50% 42%,transparent 45%,#000c 100%)}
+/* Créatures : petites cartes verticales centrées dans leur case */
+.unit{inset:5% 11%;border-radius:3px;box-shadow:0 4px 10px #000e,0 0 0 1px #000}
+.unit .emoji{font-size:28px}
+
+@media (max-width:900px){
+  .field{gap:6px}
+  .table{gap:4px;transform:none}
+  .unit{inset:2px}
+  .half,.field::before,.field::after{bottom:0}
+}
+@media (prefers-reduced-motion:reduce){.field::before{animation:none}}
+
+/* ---------- Main adverse, face cachée (à la place de l'historique) ---------- */
+.opp-hand{width:420px;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px;padding-bottom:4px}
+.opp-hand-label{font-size:11px;color:#d8c8a8;background:#000a;border:1px solid #5a4a30;border-radius:4px;padding:1px 8px}
+.opp-hand-cards{width:100%;display:flex;justify-content:flex-end;container-type:inline-size}
+.card-back{--bw:112px;width:var(--bw);height:calc(var(--bw) * 1.46);flex:none;border-radius:6px;border:2px solid #1a120a;background:#1a120a center/cover no-repeat;box-shadow:-3px 0 8px #000b}
+/* Les dos se chevauchent davantage quand la main adverse est pleine (--n : nombre de cartes) */
+.card-back+.card-back{margin-left:min(-36px,calc((100cqw - var(--bw) * var(--n)) / max(var(--n) - 1, 1)))}
+
+/* ---------- Historique : bouton dans la barre du haut et panneau ---------- */
+.logbtn{position:absolute;left:46px;top:8px;font-size:15px;padding:2px 8px}
+.log-backdrop{position:fixed;inset:0;z-index:41}
+.log-panel{position:absolute;top:84px;left:8px;width:min(360px,92vw);max-height:min(60vh,520px);display:flex;flex-direction:column;background:linear-gradient(#2a241c,#110d09);border:2px solid var(--gold);border-radius:8px;box-shadow:0 8px 30px #000;overflow:hidden}
+.log-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;color:var(--gold-l);font-weight:bold;font-size:14px;border-bottom:1px solid #5a4a30;background:linear-gradient(#4a3a22,#241a0c)}
+.log-head button{padding:2px 8px;font-size:12px;font-weight:normal}
+.log-panel .log{display:block;width:auto;height:auto;flex:1;min-height:0;border:none;border-radius:0;background:#0008;font-size:13px}
+
+@media (max-width:900px){
+  .menubtn{top:4px;transform:none}
+  .logbtn{left:4px;top:auto;bottom:4px;padding:2px 6px;font-size:13px}
+  .opp-hand{width:100%;flex-direction:row;align-items:center;justify-content:flex-end;order:-2;padding:0}
+  .opp-hand-label{font-size:10px;white-space:nowrap}
+  .opp-hand-cards{width:auto;flex:1}
+  .card-back{--bw:30px;border-width:1px;border-radius:3px}
+  .card-back+.card-back{margin-left:-16px}
+  .log-panel{top:64px;left:4px}
+}

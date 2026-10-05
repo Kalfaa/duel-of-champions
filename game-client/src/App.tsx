@@ -16,7 +16,7 @@ export function App() {
   }
 
   if (game.screen === 'game' && game.view) {
-    return <GameScreen view={game.view} ui={game.ui} flashes={game.flashes} attacking={game.attacking} ghosts={game.ghosts} turnBanner={game.turnBanner} onClick={game.click} onLeave={game.leave} />;
+    return <GameScreen view={game.view} ui={game.ui} flashes={game.flashes} attacking={game.attacking} ghosts={game.ghosts} turnBanner={game.turnBanner} drawn={game.drawn} onClick={game.click} onLeave={game.leave} />;
   }
 
   return <Menu error={game.connectionError} onStart={game.start} />;

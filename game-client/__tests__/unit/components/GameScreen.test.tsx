@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GameScreen } from '../../../src/components/GameScreen';
 import { logClass } from '../../../src/components/GameLog';
+import { LogPanel } from '../../../src/components/LogPanel';
 import { EMPTY_UI } from '../../../src/game/selection';
 import { card, gameEvent, mainOptions, playable, player, step, unit, view } from '../fixtures';
 
@@ -9,7 +10,7 @@ const render = (v = view()) =>
   renderToStaticMarkup(<GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />);
 
 describe('GameScreen', () => {
-  it('affiche la main du joueur, les créatures et le journal', () => {
+  it('affiche la main du joueur et les créatures, sans l\'historique', () => {
     const board = [[unit(1), null, null, null], [null, null, null, null]];
     const html = render(view({
       players: [player({ hand: [card({ name: 'Cavalier solaire' })], handCount: 1, board }), player({ hand: null })],
@@ -18,7 +19,9 @@ describe('GameScreen', () => {
     expect(html).toContain('Cavalier solaire');
     expect(html).toContain('card creature playable');
     expect(html).toContain('/img/art/Elite_squire.webp');
-    expect(html).toContain('— Tour de Siegfried —');
+    // L'historique n'est plus affiché en permanence : il s'ouvre depuis le bouton 📜
+    expect(html).not.toContain('— Tour de Siegfried —');
+    expect(html).toContain('title="Historique de la partie"');
   });
 
   it('remplit les ronds de vie selon les PV restants', () => {
@@ -79,7 +82,6 @@ describe('GameScreen', () => {
   it('indique le tour adverse quand le joueur n\'a pas la main', () => {
     const html = render(view({ current: 1, options: null }));
     expect(html).toContain('Tour adverse');
-    expect(html).toContain('L&#x27;adversaire réfléchit…');
   });
 
   it('affiche la carte jouée par l\'adversaire avant sa résolution', () => {
@@ -131,7 +133,6 @@ describe('GameScreen', () => {
     expect(html).toContain('/img/art/Siegfried_Champion_of_Faith.webp');
     expect(html).toContain('✨ Agonie');
     expect(html).toContain('infligez 2 dégâts');
-    expect(html).toContain('Siegfried utilise Agonie…');
   });
 
   it('affiche le bandeau de changement de tour', () => {
@@ -174,6 +175,13 @@ describe('GameScreen', () => {
     expect(html).toContain('class="card event"');
     expect(html).toContain('utilise l&#x27;événement');
   });
+
+  it('montre la main adverse face cachée, avec le dos de sa faction', () => {
+    const html = render(view());
+    expect(html).toContain('Main adverse · 5');
+    expect(html.match(/class="card-back"/g)).toHaveLength(5);
+    expect(html).toContain("/img/back/inferno.webp");
+  });
 });
 
 describe('logClass', () => {
@@ -181,5 +189,13 @@ describe('logClass', () => {
     expect(logClass({ text: '', tone: 'action', player: 1 }, 1)).toBe('p0');
     expect(logClass({ text: '', tone: 'action', player: 0 }, 1)).toBe('p1');
     expect(logClass({ text: '', tone: 'damage', player: null }, 0)).toBe('dmg');
+  });
+});
+
+describe('LogPanel', () => {
+  it('affiche l\'historique, le plus récent en haut', () => {
+    const html = renderToStaticMarkup(<LogPanel view={view({ log: [{ text: 'Premier', tone: 'info', player: null }, { text: 'Second', tone: 'turn', player: null }] })} onClose={() => {}} />);
+    expect(html).toContain('📜 Historique');
+    expect(html.indexOf('Second')).toBeLessThan(html.indexOf('Premier'));
   });
 });
