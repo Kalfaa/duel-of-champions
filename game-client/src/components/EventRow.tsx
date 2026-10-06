@@ -1,6 +1,6 @@
 import type { GameView } from '../api/protocol';
 import type { Click, Selection } from '../game/selection';
-import type { Inspect } from './CardInspector';
+import { hoverHandlers, type Hover, type Inspect } from './CardInspector';
 import { ArtFallback, artStyle, cls, onRightClick } from './common';
 
 interface Props {
@@ -8,10 +8,11 @@ interface Props {
   selection: Selection;
   onClick(click: Click): void;
   onInspect(target: Inspect): void;
+  onHover?: Hover;
 }
 
 /** Les deux événements en jeu, communs aux deux joueurs ; celui de gauche quitte le jeu à la fin du tour. */
-export function EventRow({ view, selection, onClick, onInspect }: Props) {
+export function EventRow({ view, selection, onClick, onInspect, onHover }: Props) {
   // Un serveur pas encore mis à jour n'envoie pas les événements : la zone est alors masquée
   const events = view.events ?? [];
   if (!events.length) return null;
@@ -29,6 +30,7 @@ export function EventRow({ view, selection, onClick, onInspect }: Props) {
               title={slot === 0 ? 'Quitte le jeu à la fin du tour' : undefined}
               onClick={() => onClick({ kind: 'event', slot })}
               onContextMenu={onRightClick(() => onInspect({ kind: 'event', slot }))}
+              {...hoverHandlers(onHover, { kind: 'event', slot })}
             >
               <div className="ev-art" style={artStyle(e.art)}><ArtFallback art={e.art} icon={e.icon} /></div>
               {e.cost === null ? <div className="ev-tag">Permanent</div> : <div className="cost">{e.cost}</div>}

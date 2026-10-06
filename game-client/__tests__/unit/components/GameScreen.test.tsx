@@ -47,8 +47,8 @@ describe('GameScreen', () => {
     const html = render(view({
       players: [player(), player({ hand: null, hero: { ...player().hero, schools: ['Feu'] } })],
     }));
-    expect(html).toContain('<span class="school" title="Magie : Lumière">☀️</span>');
-    expect(html).toContain('<span class="school" title="Magie : Feu">🔥</span>');
+    expect(html).toContain('<span class="school" title="Magie : Lumière"><img class="school-icon" src="/img/school/lumiere.webp" alt="Lumière"/></span>');
+    expect(html).toContain('<span class="school" title="Magie : Feu"><img class="school-icon" src="/img/school/feu.webp" alt="Feu"/></span>');
   });
 
   it('anime seulement la créature qui attaque', () => {
@@ -90,6 +90,36 @@ describe('GameScreen', () => {
     expect(used).not.toContain('ready');
   });
 
+  it('affiche les cartes restées en jeu de chaque joueur, avec leur couloir', () => {
+    const lasting = [{ index: 0, card: card({ name: 'Ange gardien', type: 'spell', icon: '👼' }), duration: 'nextTurn' as const, lane: 1 }];
+    const html = render(view({ players: [player({ lasting }), player({ hand: null })] }));
+    expect(html).toContain('class="lasting-card spell"');
+    expect(html).toContain('👼 Ange gardien<small> · couloir 2</small>');
+  });
+
+  it('n\'affiche ni le pouvoir ni la capacité permanente des héros sur le champ de bataille', () => {
+    const hero = { ...player().hero, passive: { name: 'Voie de l\'honneur', text: 'Permanent.' } };
+    const html = render(view({ players: [player({ hero }), player({ hand: null })] }));
+    expect(html).not.toContain('class="power"');
+  });
+
+  it('montre les cartes révélées d\'un choix après résolution', () => {
+    const pick = {
+      prompt: 'Choisissez la carte que l\'adversaire défausse.', labels: null,
+      options: [{ kind: 'card' as const, zone: 'revealed' as const, cardId: 'soin' }], cards: [card({ id: 'soin', name: 'Soin' })],
+    };
+    const html = render(view({ options: null, pick }));
+    expect(html).toContain('Choisissez la carte que l&#x27;adversaire défausse.');
+    expect(html).toContain('<span>Soin</span>');
+  });
+
+  it('affiche le pseudo des deux joueurs dans la barre du haut', () => {
+    const html = render(view({ players: [player({ name: 'Halospart1' }), player({ name: 'MoarSpartan', hand: null })] }));
+    expect(html).toContain('>Halospart1</div>');
+    expect(html).toContain('>MoarSpartan</div>');
+    expect(html).toContain('Siegfried · Main');
+  });
+
   it('indique le tour adverse quand le joueur n\'a pas la main', () => {
     const html = render(view({ current: 1, options: null }));
     expect(html).toContain('Tour adverse');
@@ -101,6 +131,7 @@ describe('GameScreen', () => {
       pending: { kind: 'card', player: 1, card: card({ id: 'autelDestruction', name: 'Autel de destruction', type: 'fortune', text: 'Inflige 2 dégâts au héros ennemi.' }), choices: [{ kind: 'hero', player: 0 }] },
     }));
     expect(html).toContain('class="reveal p1"');
+    expect(html).toContain('class="icard fortune"');
     expect(html).toContain('Siegfried joue');
     expect(html).toContain('Autel de destruction');
     expect(html).toContain('Inflige 2 dégâts au héros ennemi.');
@@ -140,7 +171,7 @@ describe('GameScreen', () => {
       pending: { kind: 'power', player: 1, power: { name: 'Agonie', cost: 0, text: 'Défaussez une carte : infligez 2 dégâts à une créature ciblée.' }, choices: [{ kind: 'hero', player: 0 }] },
     }));
     expect(html).toContain('class="reveal p1"');
-    expect(html).toContain('class="card power"');
+    expect(html).toContain('class="icard hero"');
     expect(html).toContain('/img/art/Siegfried_Champion_of_Faith.webp');
     expect(html).toContain('✨ Agonie');
     expect(html).toContain('infligez 2 dégâts');
@@ -185,7 +216,7 @@ describe('GameScreen', () => {
 
   it('révèle l\'événement utilisé par l\'adversaire', () => {
     const html = render(view({ current: 1, options: null, pending: { kind: 'event', player: 1, event: gameEvent({ used: true }), choices: [] } }));
-    expect(html).toContain('class="card event"');
+    expect(html).toContain('class="icard event"');
     expect(html).toContain('utilise l&#x27;événement');
   });
 

@@ -1,6 +1,6 @@
 import type { GameView, PlayerIndex, StatKey } from '../api/protocol';
 import type { Click } from '../game/selection';
-import { cls, STAT } from './common';
+import { cls, FactionIcon, STAT } from './common';
 
 interface Props {
   view: GameView;
@@ -14,12 +14,12 @@ function Side({ view, player, side }: { view: GameView; player: PlayerIndex; sid
   const stat = (k: StatKey) => <span className={cls('sb', k)} title={STAT[k].name}>{p[k]}</span>;
   return (
     <div className={cls('tb-side', side, view.current === player && 'active')}>
-      <div className={cls('banner', p.faction)}>{p.factionIcon}</div>
+      <div className={cls('banner', p.faction)} title={p.factionLabel}><FactionIcon faction={p.faction} label={p.factionLabel} /></div>
       <div className="pinfo">
-        <div className="pname">{p.hero.name}</div>
+        <div className="pname" title={`${p.name} — ${p.hero.name}`}>{p.name}</div>
         <div className="statrow">
           {stat('m')}{stat('g')}{stat('d')}
-          <span className="psub">Main {p.handCount}</span>
+          <span className="psub">{p.hero.name} · Main {p.handCount}</span>
         </div>
       </div>
       <div className="resc" title="Ressources"><b>{p.res}</b><small>{p.maxRes}</small></div>

@@ -1,28 +1,32 @@
 import type { AiStrategy } from '../model/ai-player';
+import { assertPlayableDeck, DECKS, PLAYABLE_DECKS } from '../model/decks';
 import { FACTIONS } from '../model/factions';
 import { Game } from '../model/game';
-import { buildPlayerView } from '../model/game-view';
+import { buildPlayerView, toHeroView, type HeroView } from '../model/game-view';
 import type { IMatchmakingQueue } from '../model/matchmaking-queue';
-import { FACTION_IDS, type FactionId, type GameAction, type PlayerIndex } from '../model/types';
+import { type DeckId, type FactionId, type GameAction, type PlayerIndex } from '../model/types';
+import type { IAccountClient } from '../integration/account-client';
 import type { IGameRepository } from '../repository/game-repository';
-import { AlreadyInGameError, NotInGameError } from './errors';
-import type { IDelay, IIdGenerator, IPlayerChannel, ISeedSource } from './ports';
+import { AlreadyInGameError, NotInGameError, UnknownPlayerError } from './errors';
+import type { IDelay, IIdGenerator, IPlayerChannel, ISeedSource, PlayerIdentity } from './ports';
 
-export interface FactionSummary {
-  id: FactionId;
-  label: string;
-  icon: string;
+/** Deck jouable, tel que proposé au joueur. */
+export interface DeckSummary {
+  id: DeckId;
+  faction: FactionId;
+  factionLabel: string;
+  factionIcon: string;
   description: string;
-  hero: { name: string; icon: string; art: string; power: { name: string; cost: number; text: string } };
+  hero: HeroView;
 }
 
 export interface IGameService {
-  listFactions(): FactionSummary[];
-  /** Enregistre un joueur connecté et retourne son identifiant. */
-  connect(channel: IPlayerChannel): string;
+  listDecks(): DeckSummary[];
+  /** Enregistre la connexion d'un joueur authentifié et retourne son identifiant de connexion. */
+  connect(channel: IPlayerChannel, identity: PlayerIdentity): string;
   disconnect(playerId: string): Promise<void>;
-  startAiGame(playerId: string, faction: FactionId): Promise<void>;
-  findMatch(playerId: string, faction: FactionId): Promise<void>;
+  startAiGame(playerId: string, deck: DeckId): Promise<void>;
+  findMatch(playerId: string, deck: DeckId): Promise<void>;
   act(playerId: string, action: GameAction): Promise<void>;
   /** Quitte la file d'attente ou la partie en cours (abandon si elle n'est pas terminée). */
   leave(playerId: string): Promise<void>;
@@ -46,8 +50,13 @@ export const DEFAULT_DELAYS: PacingDelays = { aiAction: 700, turnStart: 1600, ca
 /** Garde-fou contre une IA qui ne terminerait jamais son tour. */
 const MAX_AI_ACTIONS_PER_TURN = 40;
 
+interface Connection {
+  channel: IPlayerChannel;
+  identity: PlayerIdentity;
+}
+
 export class GameService implements IGameService {
-  private readonly channels = new Map<string, IPlayerChannel>();
+  private readonly connections = new Map<string, Connection>();
 
   constructor(
     private readonly games: IGameRepository,
@@ -56,51 +65,53 @@ export class GameService implements IGameService {
     private readonly delay: IDelay,
     private readonly ids: IIdGenerator,
     private readonly seeds: ISeedSource,
+    private readonly accounts: IAccountClient,
     private readonly delays: PacingDelays = DEFAULT_DELAYS,
   ) {}
 
-  listFactions(): FactionSummary[] {
-    return FACTION_IDS.map(id => {
-      const f = FACTIONS[id];
-      const { name, cost, text } = f.hero.power;
+  listDecks(): DeckSummary[] {
+    return PLAYABLE_DECKS.map(id => {
+      const deck = DECKS[id];
+      const faction = FACTIONS[deck.faction];
       return {
-        id, label: f.label, icon: f.icon, description: f.description,
-        hero: { name: f.hero.name, icon: f.hero.icon, art: f.hero.art, power: { name, cost, text } },
+        id, faction: deck.faction, factionLabel: faction.label, factionIcon: faction.icon,
+        description: deck.description, hero: toHeroView(deck.hero),
       };
     });
   }
 
-  connect(channel: IPlayerChannel): string {
+  connect(channel: IPlayerChannel, identity: PlayerIdentity): string {
     const playerId = this.ids.next();
-    this.channels.set(playerId, channel);
+    this.connections.set(playerId, { channel, identity });
     return playerId;
   }
 
   async disconnect(playerId: string): Promise<void> {
     await this.leave(playerId);
-    this.channels.delete(playerId);
+    this.connections.delete(playerId);
   }
 
-  async startAiGame(playerId: string, faction: FactionId): Promise<void> {
+  async startAiGame(playerId: string, deck: DeckId): Promise<void> {
+    assertPlayableDeck(deck);
+    const { accountId, name } = this.identity(playerId);
     await this.ensureAvailable(playerId);
-    const game = Game.createAgainstAi({ id: this.ids.next(), seed: this.seeds.next(), playerId, faction });
+    const game = Game.createAgainstAi({ id: this.ids.next(), seed: this.seeds.next(), player: { id: playerId, deck, accountId, name } });
     await this.publish(game);
     await this.advance(game);
   }
 
-  async findMatch(playerId: string, faction: FactionId): Promise<void> {
+  async findMatch(playerId: string, deck: DeckId): Promise<void> {
+    assertPlayableDeck(deck);
+    const { accountId, name } = this.identity(playerId);
     await this.ensureAvailable(playerId);
-    const pair = this.queue.join({ playerId, faction });
+    const pair = this.queue.join({ playerId, accountId, name, deck });
     if (!pair) {
-      this.channels.get(playerId)?.send({ type: 'waiting' });
+      this.connections.get(playerId)?.channel.send({ type: 'waiting' });
       return;
     }
     const [a, b] = pair;
-    const game = Game.create({
-      id: this.ids.next(),
-      seed: this.seeds.next(),
-      players: [{ id: a.playerId, faction: a.faction, isAi: false }, { id: b.playerId, faction: b.faction, isAi: false }],
-    });
+    const seat = (t: typeof a) => ({ id: t.playerId, deck: t.deck, isAi: false, accountId: t.accountId, name: t.name });
+    const game = Game.create({ id: this.ids.next(), seed: this.seeds.next(), players: [seat(a), seat(b)] });
     await this.publish(game);
     await this.advance(game);
   }
@@ -121,6 +132,12 @@ export class GameService implements IGameService {
     await this.detach(game, pi);
   }
 
+  private identity(playerId: string): PlayerIdentity {
+    const connection = this.connections.get(playerId);
+    if (!connection) throw new UnknownPlayerError(playerId);
+    return connection.identity;
+  }
+
   private async ensureAvailable(playerId: string): Promise<void> {
     if (this.queue.has(playerId)) throw new AlreadyInGameError();
     const game = await this.games.findByPlayer(playerId);
@@ -131,9 +148,17 @@ export class GameService implements IGameService {
   }
 
   private async detach(game: Game, pi: PlayerIndex): Promise<void> {
+    const wasOver = game.isOver;
     game.leave(pi);
     if (game.isAbandoned) await this.games.delete(game.id);
     else await this.publish(game);
+    if (!wasOver) await this.reportOutcome(game);
+  }
+
+  /** Transmet l'issue d'une partie qui vient de se terminer au serveur de comptes (classement et statistiques). */
+  private async reportOutcome(game: Game): Promise<void> {
+    const outcome = game.outcome();
+    if (outcome) await this.accounts.reportMatch(outcome);
   }
 
   /**
@@ -158,6 +183,12 @@ export class GameService implements IGameService {
    * et la riposte d'un défenseur est diffusée séparément, juste après l'attaque.
    */
   private async perform(game: Game, pi: PlayerIndex, action: GameAction): Promise<void> {
+    const wasOver = game.isOver;
+    await this.resolve(game, pi, action);
+    if (!wasOver && game.isOver) await this.reportOutcome(game);
+  }
+
+  private async resolve(game: Game, pi: PlayerIndex, action: GameAction): Promise<void> {
     game.apply(pi, action);
     await this.publish(game);
     if (game.pending) {
@@ -166,7 +197,8 @@ export class GameService implements IGameService {
       game.resolvePending();
       await this.publish(game);
     }
-    if (game.hasPendingRetaliation) {
+    // Une Double attaque peut entraîner une seconde riposte après la première
+    while (game.hasPendingRetaliation) {
       await this.delay.wait(this.delays.retaliation);
       if (game.isOver) return;
       game.resolveRetaliation();
@@ -178,7 +210,7 @@ export class GameService implements IGameService {
     await this.games.save(game);
     const events = game.drainEvents();
     for (const pi of game.humanPlayers()) {
-      this.channels.get(game.player(pi).id)?.send({ type: 'state', view: buildPlayerView(game, pi), events });
+      this.connections.get(game.player(pi).id)?.channel.send({ type: 'state', view: buildPlayerView(game, pi), events });
     }
   }
 }

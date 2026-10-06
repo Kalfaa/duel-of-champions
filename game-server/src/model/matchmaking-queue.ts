@@ -1,9 +1,12 @@
 import { GameRuleError } from './errors';
-import type { FactionId } from './types';
+import type { DeckId } from './types';
 
 export interface QueueTicket {
   playerId: string;
-  faction: FactionId;
+  /** Compte du joueur : deux connexions d'un même compte ne sont jamais appariées. */
+  accountId: string;
+  name: string;
+  deck: DeckId;
 }
 
 export interface IMatchmakingQueue {
@@ -12,19 +15,20 @@ export interface IMatchmakingQueue {
   has(playerId: string): boolean;
 }
 
-/** File d'attente joueur contre joueur : apparie les joueurs dans leur ordre d'arrivée. */
+/** File d'attente joueur contre joueur : apparie les joueurs dans leur ordre d'arrivée, jamais un compte avec lui-même. */
 export class MatchmakingQueue implements IMatchmakingQueue {
   private readonly waiting: QueueTicket[] = [];
 
   /** Ajoute le joueur ; retourne la paire formée si un adversaire attendait déjà. */
   join(ticket: QueueTicket): [QueueTicket, QueueTicket] | null {
     if (this.has(ticket.playerId)) throw new GameRuleError('Vous êtes déjà en recherche d\'adversaire.');
-    const opponent = this.waiting.shift();
-    if (!opponent) {
+    const i = this.waiting.findIndex(t => t.accountId !== ticket.accountId);
+    if (i === -1) {
       this.waiting.push(ticket);
       return null;
     }
-    return [opponent, ticket];
+    const [opponent] = this.waiting.splice(i, 1);
+    return [opponent!, ticket];
   }
 
   leave(playerId: string): boolean {

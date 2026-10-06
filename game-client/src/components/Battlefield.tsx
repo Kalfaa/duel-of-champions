@@ -4,7 +4,7 @@ import type { FlashMap } from '../game/flashes';
 import type { Ghost } from '../game/ghosts';
 import type { Lunge } from '../hooks/useGame';
 import { slotKey, type Click, type Highlights, type Selection } from '../game/selection';
-import type { Inspect } from './CardInspector';
+import { hoverHandlers, type Hover, type Inspect } from './CardInspector';
 import { ArtFallback, artStyle, ATTACK, cls, FlashMark, keywordIcons, onRightClick, StatBadges } from './common';
 import { EventRow } from './EventRow';
 import { HeroColumn } from './HeroColumn';
@@ -22,10 +22,11 @@ interface Props {
   onClick(click: Click): void;
   onInspect(target: Inspect): void;
   onOpenGrave(player: PlayerIndex): void;
+  onHover?: Hover;
 }
 
 /** Le joueur est toujours affiché à gauche (classe p0), l'adversaire à droite (p1). */
-export function Battlefield({ view, selection, highlights, flashes, attacking, ghosts, onClick, onInspect, onOpenGrave }: Props) {
+export function Battlefield({ view, selection, highlights, flashes, attacking, ghosts, onClick, onInspect, onOpenGrave, onHover }: Props) {
   const opponent: PlayerIndex = view.you === 0 ? 1 : 0;
   const sideOf = (player: PlayerIndex) => (player === view.you ? 'p0' : 'p1');
 
@@ -50,14 +51,20 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
           player === view.current && u.exhausted && 'moved')}
         style={artStyle(u.card.art)}
         onContextMenu={dying ? undefined : onRightClick(() => onInspect({ kind: 'unit', uid: u.uid }))}
+        {...(dying ? {} : hoverHandlers(onHover, { kind: 'unit', uid: u.uid }))}
       >
         <ArtFallback art={u.card.art} icon={u.card.icon} />
         <span className="utag" title={ATTACK[at].name}>{ATTACK[at].icon}</span>
         {kw && <span className="ukw">{kw}</span>}
-        {(u.stack > 1 || u.poison > 0 || u.enchantments.length > 0) && (
+        {(u.stack > 1 || u.poison > 0 || u.cripple > 0 || u.boost > 0 || u.enrage > 0 || u.cannotAttack || u.immobilized || u.enchantments.length > 0) && (
           <span className="ustate">
             {u.stack > 1 && <b title={`Pile de ${u.stack}`}>×{u.stack}</b>}
             {u.poison > 0 && <b className="poison" title={`Poison ${u.poison}`}>☠{u.poison}</b>}
+            {u.cripple > 0 && <b title={`Estropiement ${u.cripple}`}>🦵{u.cripple}</b>}
+            {u.boost > 0 && <b title={`+${u.boost} en attaque`}>⬆{u.boost}</b>}
+            {u.enrage > 0 && <b title={`Rage ${u.enrage}`}>😡{u.enrage}</b>}
+            {u.cannotAttack && <b title="Ne peut pas attaquer ce tour-ci">🚫</b>}
+            {u.immobilized && <b title="Immobilisée">⛓️</b>}
             {u.enchantments.length > 0 && <b title={u.enchantments.join(', ')}>✨</b>}
           </span>
         )}
@@ -87,7 +94,7 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
       <div className="half r" style={{ backgroundImage: `url('/img/bg/${view.players[opponent].faction}.webp')` }} />
       {/* Table de jeu vue en légère perspective, comme dans le jeu original */}
       <div className="table">
-      <HeroColumn view={view} player={view.you} side="p0" highlights={highlights} flashes={flashes} onClick={onClick} onInspect={onInspect} onOpenGrave={onOpenGrave} />
+      <HeroColumn view={view} player={view.you} side="p0" highlights={highlights} flashes={flashes} onClick={onClick} onInspect={onInspect} onOpenGrave={onOpenGrave} onHover={onHover} />
       <div className="grid">
         {LANES.map(lane => (
           <Fragment key={lane}>
@@ -99,10 +106,10 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
           </Fragment>
         ))}
       </div>
-      <HeroColumn view={view} player={opponent} side="p1" highlights={highlights} flashes={flashes} onClick={onClick} onInspect={onInspect} onOpenGrave={onOpenGrave} />
+      <HeroColumn view={view} player={opponent} side="p1" highlights={highlights} flashes={flashes} onClick={onClick} onInspect={onInspect} onOpenGrave={onOpenGrave} onHover={onHover} />
       </div>
       {/* Les deux événements sont posés à plat sous le champ de bataille */}
-      <EventRow view={view} selection={selection} onClick={onClick} onInspect={onInspect} />
+      <EventRow view={view} selection={selection} onClick={onClick} onInspect={onInspect} onHover={onHover} />
     </div>
   );
 }

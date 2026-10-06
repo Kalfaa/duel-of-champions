@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { GameView, PlayerIndex } from '../api/protocol';
 import type { Lunge } from '../hooks/useGame';
 import type { FlashMap } from '../game/flashes';
 import type { Ghost } from '../game/ghosts';
 import { highlights as computeHighlights, type Click, type UiState } from '../game/selection';
 import { Battlefield } from './Battlefield';
-import { CardInspector, resolveInspect, type Inspect } from './CardInspector';
+import { CardInspector, CardPreview, resolveInspect, type Hover, type Inspect } from './CardInspector';
 import { Chooser } from './Chooser';
 import { GraveViewer } from './GraveViewer';
 import { Hand } from './Hand';
@@ -37,6 +37,8 @@ export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = 
   const [graveOf, setGraveOf] = useState<PlayerIndex | null>(null);
   const [inspect, setInspect] = useState<Inspect | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [hover, setHover] = useState<Inspect | null>(null);
+  const onHover = useCallback<Hover>(target => setHover(target), []);
   // La carte inspectée peut disparaître (créature détruite, carte jouée) : l'inspection se ferme alors d'elle-même
   const inspecting = inspect !== null && resolveInspect(view, inspect) !== null;
   const highlights = useMemo(() => computeHighlights(view, ui.selection), [view, ui.selection]);
@@ -78,9 +80,9 @@ export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = 
     <>
       <div className="game">
         <TopBar view={view} onClick={onClick} onMenu={confirmLeave} onLog={() => setLogOpen(open => !open)} />
-        <Battlefield view={view} selection={ui.selection} highlights={highlights} flashes={flashes} attacking={attacking} ghosts={ghosts} onClick={onClick} onInspect={setInspect} onOpenGrave={setGraveOf} />
+        <Battlefield view={view} selection={ui.selection} highlights={highlights} flashes={flashes} attacking={attacking} ghosts={ghosts} onClick={onClick} onInspect={setInspect} onOpenGrave={setGraveOf} onHover={onHover} />
         <div className="bottom">
-          <Hand view={view} selection={ui.selection} highlights={highlights} drawn={drawn} onClick={onClick} onInspect={setInspect} />
+          <Hand view={view} selection={ui.selection} highlights={highlights} drawn={drawn} onClick={onClick} onInspect={setInspect} onHover={onHover} />
           <OpponentHand view={view} drawn={drawn} />
         </div>
       </div>
@@ -91,6 +93,7 @@ export function GameScreen({ view, ui, flashes, attacking, ghosts, turnBanner = 
       <Chooser view={view} selection={ui.selection} onClick={onClick} onInspect={setInspect} />
       {view.pending && <RevealedCard key={`${view.log.length}-${pendingKey(view.pending)}`} view={view} />}
       {inspect && inspecting && <CardInspector view={view} target={inspect} onClose={() => setInspect(null)} />}
+      {hover && !inspecting && <CardPreview view={view} target={hover} />}
       {view.phase === 'over' && (
         <div className="overlay">
           <h1>{view.winner === view.you ? '🏆 Victoire !' : '💀 Défaite…'}</h1>

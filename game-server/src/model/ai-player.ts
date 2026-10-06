@@ -20,17 +20,23 @@ const MIN_GAIN = 0.2;
 const POWER_OVER_DEVELOP = 3;
 /** Nombre maximal de combinaisons de choix évaluées par carte. */
 const MAX_COMBOS = 150;
+/** Nombre maximal de choix en chaîne simulés après une action. */
+const MAX_CHAINED_PICKS = 10;
 /** Cartes de la main envisagées pour un choix « carte de la main » (les moins précieuses). */
 const HAND_CANDIDATES = 2;
 
-/** Valeur d'une créature sur le plateau. */
-export function unitValue(u: Unit): number {
+/** Valeur d'une créature sur le plateau ; sans attaque et riposte actuelles, ses valeurs de base sont utilisées. */
+export function unitValue(u: Unit, atk = u.atk, ret = u.ret): number {
   const k = u.keywords;
   const abilities = (k.noret ? 1 : 0) + (k.meleeGuard ?? 0) + (k.rangedGuard ?? 0) + (k.heal ?? 0) + (k.regen ?? 0)
     + (k.lifeDrain ?? 0) * 1.2 + (k.infect ?? 0) + (k.areaBlast ?? 0) + (k.incorporeal ? 2 : 0)
     + (k.charge || k.sweep ? 1.5 : 0) + (k.attackAnywhere ? 2 : 0) + (k.taunt ? 1 : 0) + (k.mending ? 1 : 0)
-    + (k.imposeDiscard ? 3 : 0);
-  return u.atk * 1.5 + u.hpCur + u.ret * 0.7 + abilities - u.poison * 1.5;
+    + (k.imposeDiscard ? 3 : 0) + (k.retribution ? 1 : 0) + (k.preemptive ? 1.5 : 0) + (k.fireBurst ?? 0) * 0.5
+    + (k.fireHeal ? 0.5 : 0) + (k.crippling ?? 0) + (k.darkWard ? 0.5 : 0) + (k.deathTouch ? 3 : 0) + (k.retAura ?? 0)
+    + (k.supplyStrike ?? 0) * 2 + (k.supplyDraw ?? 0) * 2.5 + (k.trample ? 1 : 0) + (k.deathCurse ?? 0) * 0.5
+    + (k.deathDraw ? 1.5 : 0) + (k.recycle ? 1 : 0) + (k.honor ?? 0) * 1.5 + (k.hypnotize ? 1.5 : 0) + (k.frozenTouch ? 1.5 : 0)
+    + (k.magicShield ? 2 : 0) + (k.magicResist ? 1 : 0) + (k.doubleAttack ? atk : 0) + (k.armor ?? 0) * 1.5 + (k.enrage ?? 0) * 0.5;
+  return atk * 1.5 + u.hpCur + ret * 0.7 + abilities - u.poison * 1.5;
 }
 
 /** Valeur d'une carte en main : les créatures, cœur du deck, valent un peu plus. */
@@ -47,7 +53,7 @@ export function evaluate(game: Game, pi: PlayerIndex): number {
   if (game.isOver) return game.winner === pi ? WIN : -WIN;
   const me = game.player(pi);
   const foe = game.player(other(pi));
-  const board = (q: PlayerIndex) => game.units(q).reduce((s, x) => s + unitValue(x.unit), 0);
+  const board = (q: PlayerIndex) => game.units(q).reduce((s, x) => s + unitValue(x.unit, game.attackOf(x.unit), game.retaliationOf(x.unit)), 0);
   return heroValue(me.hp) * 0.8 - heroValue(foe.hp)
     + board(pi) - board(other(pi))
     + me.hand.reduce((s, id) => s + handCardValue(id), 0) - foe.hand.length * 1.5
@@ -65,7 +71,16 @@ const best = (candidates: Candidate[]): Candidate | null =>
 export class AiPlayer implements AiStrategy {
   chooseAction(game: Game, pi: PlayerIndex): GameAction {
     const base = evaluate(game, pi);
+    const pick = game.pendingPick;
+    if (pick?.player === pi) return this.bestPick(game, pi, pick.options);
     return this.heroAction(game, pi, base) ?? this.bestMove(game, pi, base) ?? { type: 'endTurn' };
+  }
+
+  /** Choix après résolution : l'option qui laisse la meilleure position (pour les choix en chaîne, la première suite). */
+  private bestPick(game: Game, pi: PlayerIndex, options: readonly Choice[]): GameAction {
+    const candidates = options.map(choice => ({ choice, score: this.simulate(game, pi, { type: 'pick', choice }) }));
+    const chosen = candidates.reduce((b, c) => (c.score > b.score ? c : b), candidates[0]!);
+    return { type: 'pick', choice: chosen.choice };
   }
 
   private heroAction(game: Game, pi: PlayerIndex, base: number): GameAction | null {
@@ -94,7 +109,7 @@ export class AiPlayer implements AiStrategy {
 
   private powerAction(game: Game, pi: PlayerIndex, base: number): Candidate | null {
     if (game.whyNotPower(pi) !== null) return null;
-    const bonus = game.heroPower(pi).effect.aiBonus?.(game, pi) ?? 0;
+    const bonus = game.heroPower(pi)?.effect.aiBonus?.(game, pi) ?? 0;
     return best(this.combos(game, pi, game.powerSteps(pi), null).map(choices => {
       const action: GameAction = { type: 'power', choices };
       return { score: this.simulate(game, pi, action) - base + bonus, action };
@@ -134,11 +149,12 @@ export class AiPlayer implements AiStrategy {
     const hand = game.player(pi).hand;
     let result: Choice[][] = [[]];
     steps.forEach(({ step, options }) => {
-      const candidates = options[0]?.kind === 'hand'
-        ? [...options].sort((x, y) => handValueAt(hand, x) - handValueAt(hand, y)).slice(0, HAND_CANDIDATES)
-        : options;
+      const ranked = (list: readonly Choice[]) => (list[0]?.kind === 'hand'
+        ? [...list].sort((x, y) => handValueAt(hand, x) - handValueAt(hand, y)).slice(0, HAND_CANDIDATES)
+        : list);
       const next: Choice[][] = [];
       for (const prefix of result) {
+        const candidates = ranked(step.after ? step.after(game, pi, prefix) : options);
         for (const choice of candidates) {
           if (step.distinctFrom !== undefined && sameChoice(choice, prefix[step.distinctFrom]!)) continue;
           if (choice.kind === 'hand' && (choice.index === handIndex || prefix.some(c => sameChoice(c, choice)))) continue;
@@ -158,7 +174,9 @@ export class AiPlayer implements AiStrategy {
     try {
       sim.apply(pi, action);
       if (sim.pending) sim.resolvePending();
-      if (sim.hasPendingRetaliation) sim.resolveRetaliation();
+      while (sim.hasPendingRetaliation) sim.resolveRetaliation();
+      // Les choix en chaîne sont évalués avec leur première option
+      for (let i = 0; i < MAX_CHAINED_PICKS && sim.pendingPick?.player === pi; i++) sim.pick(pi, sim.pendingPick.options[0]!);
     } catch {
       return -Infinity;
     }

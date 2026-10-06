@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameRuleError } from '../../../src/model/errors';
-import { Game, HERO_HP, STARTING_HAND } from '../../../src/model/game';
-import { FACTIONS } from '../../../src/model/factions';
+import { AI_PLAYER_NAME, Game, STARTING_HAND } from '../../../src/model/game';
+import { DECKS, PLAYABLE_DECKS } from '../../../src/model/decks';
 import { newGame, place, playNow, powerNow, readyToPlay, setEvents, slot, state, unit } from './helpers';
 
 describe('Game — mise en place et ravitaillement', () => {
@@ -9,7 +9,7 @@ describe('Game — mise en place et ravitaillement', () => {
     const { game, a, b } = newGame();
     expect(game.player(a).hand).toHaveLength(STARTING_HAND + 1);
     expect(game.player(b).hand).toHaveLength(STARTING_HAND);
-    expect(game.player(a).hp).toBe(HERO_HP);
+    expect(game.player(a).hp).toBe(20);
     expect(game.player(a).maxRes).toBe(1);
     expect(game.player(a).res).toBe(1);
     expect(game.phase).toBe('action');
@@ -17,24 +17,30 @@ describe('Game — mise en place et ravitaillement', () => {
   });
 
   it('les héros commencent avec leurs caractéristiques officielles', () => {
-    const { game } = newGame(['havre', 'necropole']);
+    const { game } = newGame(['siegfried', 'namtaru']);
     expect(game.player(0)).toMatchObject({ m: 2, g: 0, d: 1 });
     expect(game.player(1)).toMatchObject({ m: 0, g: 2, d: 1 });
   });
 
   it('est déterministe pour une même graine', () => {
-    const g1 = newGame(['havre', 'inferno'], 7).game;
-    const g2 = newGame(['havre', 'inferno'], 7).game;
+    const g1 = newGame(['siegfried', 'kalAzaar'], 7).game;
+    const g2 = newGame(['siegfried', 'kalAzaar'], 7).game;
     expect(g1.current).toBe(g2.current);
     expect(g1.player(0).hand).toEqual(g2.player(0).hand);
   });
 
-  it('donne à l\'IA une faction différente de celle du joueur', () => {
+  it('donne à l\'IA un deck d\'une autre faction que celui du joueur', () => {
     for (let seed = 0; seed < 20; seed++) {
-      const game = Game.createAgainstAi({ id: 'g', seed, playerId: 'p', faction: 'necropole' });
+      const game = Game.createAgainstAi({ id: 'g', seed, player: { id: 'p', deck: 'kaiko', accountId: 'acc', name: 'Joueur' } });
       expect(game.player(1).isAi).toBe(true);
-      expect(game.player(1).faction).not.toBe('necropole');
+      expect(game.player(1).faction).not.toBe('sanctuaire');
+      expect(PLAYABLE_DECKS).toContain(game.player(1).deckId);
     }
+  });
+
+  it('chaque héros commence avec ses PV officiels', () => {
+    const { game, a, b } = newGame(['kaiko', 'ishuma']);
+    expect([game.player(a).hp, game.player(b).hp]).toEqual([18, 20]);
   });
 
   it('au tour suivant : production +1, ressources rechargées, une carte piochée', () => {
@@ -52,7 +58,7 @@ describe('Game — mise en place et ravitaillement', () => {
     const { game, a } = newGame();
     state(game, a).deck = [];
     game.draw(a, 3);
-    expect(game.player(a).hp).toBe(HERO_HP - 3);
+    expect(game.player(a).hp).toBe(game.player(a).maxHp - 3);
   });
 
   it('une copie simulée n\'affecte pas la partie d\'origine', () => {
@@ -91,7 +97,7 @@ describe('Game — action du héros', () => {
   });
 
   it('n\'autorise qu\'une action du héros par tour, pouvoir compris', () => {
-    const { game, a } = newGame(['havre', 'inferno']);
+    const { game, a } = newGame(['siegfried', 'kalAzaar']);
     readyToPlay(game, a, []);
     game.develop(a, 'm');
     expect(() => game.develop(a, 'g')).toThrow('Votre héros a déjà agi ce tour-ci.');
@@ -99,7 +105,7 @@ describe('Game — action du héros', () => {
   });
 
   it('Kal-Azaar : défaussez une carte pour infliger 2 dégâts à une créature ; cela compte comme l\'action du héros', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu', 'bouleFeu']);
     const enemy = place(game, b, 'griffonLoyal', 0, 0);
     powerNow(game, a, [{ kind: 'hand', index: 0 }, unit(enemy)]);
@@ -110,14 +116,14 @@ describe('Game — action du héros', () => {
   });
 
   it('un pouvoir qui demande de défausser est impossible main vide', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, []);
     place(game, b, 'griffonLoyal', 0, 0);
     expect(game.whyNotPower(a)).toBe('Aucune carte à choisir dans votre main.');
   });
 
   it('Mère Namtaru : détruit une créature ennemie coûtant 2 ou moins', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     readyToPlay(game, a, ['faiblesse']);
     const cheap = place(game, b, 'griffonLoyal', 0, 0);
     place(game, b, 'cavalierSolaire', 0, 1);
@@ -127,7 +133,7 @@ describe('Game — action du héros', () => {
   });
 
   it('Siegfried : les créatures de mêlée déployées ce tour-ci gagnent +1 PV', () => {
-    const { game, a, b } = newGame(['havre', 'inferno']);
+    const { game, a, b } = newGame(['siegfried', 'kalAzaar']);
     readyToPlay(game, a, ['ecuyerElite', 'griffonLoyal', 'ecuyerElite']);
     powerNow(game, a, []);
     playNow(game, a, 0, [slot(0, 0)]);
@@ -211,7 +217,7 @@ describe('Game — déploiement', () => {
   });
 
   it('Diablotin du chaos : chaque carte jouée par l\'adversaire lui fait défausser une carte', () => {
-    const { game, a, b } = newGame(['havre', 'inferno']);
+    const { game, a, b } = newGame(['siegfried', 'kalAzaar']);
     place(game, b, 'diablotinChaos', 1, 0);
     readyToPlay(game, a, ['griffonLoyal', 'soin', 'benediction']);
     game.playCard(a, 0, [slot(0, 0)]);
@@ -251,7 +257,7 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Boule de feu : 4 dégâts à la cible et aux créatures adjacentes', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const center = place(game, b, 'seigneurAbyssal', 0, 1);
     const left = place(game, b, 'seigneurAbyssal', 0, 0);
     const behind = place(game, b, 'seigneurAbyssal', 1, 1);
@@ -262,7 +268,7 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Tempête de feu : 4 dégâts à toutes les créatures de la ligne ciblée', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const front = place(game, b, 'seigneurAbyssal', 0, 0);
     const front2 = place(game, b, 'seigneurAbyssal', 0, 3);
     const back = place(game, b, 'seigneurAbyssal', 1, 0);
@@ -272,7 +278,7 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Frénésie : une créature inflige son attaque à une autre', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const source = place(game, a, 'seigneurAbyssal', 0, 0);
     const target = place(game, b, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['frenesie']);
@@ -287,27 +293,27 @@ describe('Game — sorts et fortunes', () => {
     const ally = place(game, a, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['benediction']);
     playNow(game, a, 0, [unit(ally)]);
-    expect(ally.atk).toBe(4);
-    expect(ally.enchantments).toEqual([{ cardId: 'benediction', owner: a }]);
+    expect(game.attackOf(ally)).toBe(4);
+    expect(ally.enchantments).toEqual([{ cardId: 'benediction', owner: a, atk: 2, ret: 0, hp: 0, keywords: {} }]);
     expect(game.player(a).grave).toEqual([]);
     game.destroyUnit(ally.uid);
     expect(game.player(a).grave).toEqual(['griffonLoyal', 'benediction']);
   });
 
   it('Faiblesse : -2 en attaque et en riposte, sans descendre sous 0', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     const enemy = place(game, b, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['faiblesse']);
     playNow(game, a, 0, [unit(enemy)]);
-    expect([enemy.atk, enemy.ret]).toEqual([0, 0]);
+    expect([game.attackOf(enemy), game.retaliationOf(enemy)]).toEqual([0, 0]);
   });
 
   it('Étreinte vampirique : la créature gagne Drain de vie 2', () => {
-    const { game, a } = newGame(['necropole', 'havre']);
+    const { game, a } = newGame(['namtaru', 'siegfried']);
     const ally = place(game, a, 'gouleMiserable', 0, 0);
     readyToPlay(game, a, ['etreinteVampirique']);
     playNow(game, a, 0, [unit(ally)]);
-    expect(ally.keywords.lifeDrain).toBe(2);
+    expect(game.keywordsOf(ally).lifeDrain).toBe(2);
   });
 
   it('Appel du devoir : cherche une créature dans la bibliothèque', () => {
@@ -334,7 +340,7 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Fosse commune : remet une carte sur la bibliothèque et détruit une créature coûtant 2 ou moins', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     const cheap = place(game, b, 'griffonLoyal', 0, 0);
     const dear = place(game, b, 'cavalierSolaire', 0, 1);
     readyToPlay(game, a, ['fosseCommune', 'faiblesse']);
@@ -347,7 +353,7 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Ruines shantiri : défausse un sort et en reprend un du cimetière', () => {
-    const { game, a } = newGame(['necropole', 'havre']);
+    const { game, a } = newGame(['namtaru', 'siegfried']);
     readyToPlay(game, a, ['ruinesShantiri', 'gouleMiserable', 'faiblesse']);
     state(game, a).grave = ['maledictionNeant'];
     expect(game.playSteps(a, 0)[0]!.options).toEqual([{ kind: 'hand', index: 2 }]);
@@ -357,15 +363,15 @@ describe('Game — sorts et fortunes', () => {
   });
 
   it('Autel de destruction : remet une carte sur la bibliothèque et inflige 2 dégâts au héros ennemi', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu', 'autelDestruction']);
     playNow(game, a, 1, [{ kind: 'hand', index: 0 }]);
-    expect(game.player(b).hp).toBe(HERO_HP - 2);
+    expect(game.player(b).hp).toBe(game.player(b).maxHp - 2);
     expect(game.player(a).deck.at(-1)).toBe('traitFeu');
   });
 
   it('Malédiction du Néant : 3 dégâts aux ennemis, soigne 3 aux alliés', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     const enemy = place(game, b, 'cavalierSolaire', 0, 0);
     const ally = place(game, a, 'chevalierVampire', 0, 0);
     ally.hpCur = 1;
@@ -410,7 +416,7 @@ describe('Game — révélation d\'une carte jouée', () => {
   });
 
   it('le pouvoir du héros est payé et révélé, puis résolu seulement ensuite', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu']);
     const enemy = place(game, b, 'griffonLoyal', 0, 0);
     game.usePower(a, [{ kind: 'hand', index: 0 }, unit(enemy)]);
@@ -537,7 +543,7 @@ describe('Game — attaques', () => {
     const shooter = place(game, a, 'arbaletrierImperial', 1, 2);
     expect(game.attackTargets(a, shooter.uid)).toEqual([{ kind: 'hero', player: b }]);
     game.attack(a, shooter.uid, { kind: 'hero', player: b });
-    expect(game.player(b).hp).toBe(HERO_HP - 1);
+    expect(game.player(b).hp).toBe(game.player(b).maxHp - 1);
   });
 
   it('refuse une cible hors du couloir', () => {
@@ -572,7 +578,7 @@ describe('Game — attaques', () => {
 
 describe('Game — capacités de combat', () => {
   it('Drain de vie : soigne l\'attaquant quand il inflige des dégâts d\'attaque', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     const knight = place(game, a, 'chevalierVampire', 0, 0); // 2/0/5
     knight.hpCur = 2;
     place(game, b, 'griffonLoyal', 0, 0);
@@ -580,7 +586,7 @@ describe('Game — capacités de combat', () => {
     expect(knight.hpCur).toBe(4);
   });
 
-  it('Garde contre les tireurs : protège la créature et ses voisines', () => {
+  it('Garde distance : protège la créature et ses voisines', () => {
     const { game, a, b } = newGame();
     const squire = place(game, b, 'ecuyerElite', 0, 1); // garde 2 contre les tireurs
     const neighbour = place(game, b, 'griffonLoyal', 0, 2);
@@ -592,7 +598,7 @@ describe('Game — capacités de combat', () => {
     expect(squire.hpCur).toBe(1);
   });
 
-  it('Garde contre la mêlée : réduit l\'attaque et la riposte des créatures de mêlée', () => {
+  it('Garde mêlée : réduit l\'attaque et la riposte des créatures de mêlée', () => {
     const { game, a, b } = newGame();
     const sentinel = place(game, b, 'sentinelleImperiale', 0, 1); // 1/1/2, garde 1 contre la mêlée
     const ghoul = place(game, a, 'gouleMiserable', 0, 1); // 2/1/2
@@ -603,7 +609,7 @@ describe('Game — capacités de combat', () => {
   });
 
   it('Intangible : les dégâts non magiques sont divisés par deux', () => {
-    const { game, a, b } = newGame(['havre', 'necropole']);
+    const { game, a, b } = newGame(['siegfried', 'namtaru']);
     const ghost = place(game, b, 'fantomeErrant', 0, 0); // 2/1/3
     const ghoul = place(game, a, 'gouleMiserable', 0, 0);
     game.attack(a, ghoul.uid, { kind: 'unit', uid: ghost.uid });
@@ -624,7 +630,7 @@ describe('Game — capacités de combat', () => {
   });
 
   it('Attaque en balayage : attaque aussi les voisines de la cible sur sa ligne', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const hound = place(game, a, 'cerbere', 0, 1); // 3 attaque
     const target = place(game, b, 'seigneurAbyssal', 0, 1);
     const left = place(game, b, 'seigneurAbyssal', 0, 0);
@@ -635,7 +641,7 @@ describe('Game — capacités de combat', () => {
   });
 
   it('Explosion : inflige des dégâts aux créatures adjacentes à la cible', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const tormentor = place(game, a, 'tourmenteur', 0, 1); // 2 attaque, explosion 2
     const target = place(game, b, 'seigneurAbyssal', 0, 1);
     const behind = place(game, b, 'seigneurAbyssal', 1, 1);
@@ -644,8 +650,8 @@ describe('Game — capacités de combat', () => {
     expect([target.hpCur, behind.hpCur, far.hpCur]).toEqual([7, 7, 9]);
   });
 
-  it('Attaque n\'importe où : toute créature ennemie, le héros seulement si son couloir est vide', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+  it('Ubiquité : toute créature ennemie, le héros seulement si son couloir est vide', () => {
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const lord = place(game, a, 'seigneurAbyssal', 0, 0);
     const far = place(game, b, 'griffonLoyal', 1, 3);
     expect(game.attackTargets(a, lord.uid)).toEqual([unit(far), { kind: 'hero', player: b }]);
@@ -654,7 +660,7 @@ describe('Game — capacités de combat', () => {
   });
 
   it('Séraphin guerrier : les créatures ennemies doivent l\'attaquer si elles le peuvent', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const shooter = place(game, a, 'succube', 1, 0);
     const lord = place(game, a, 'seigneurAbyssal', 0, 2);
     place(game, b, 'gouleMiserable', 0, 0);
@@ -664,7 +670,7 @@ describe('Game — capacités de combat', () => {
   });
 
   it('Infection : les dégâts d\'attaque posent du poison, qui blesse au ravitaillement', () => {
-    const { game, a, b } = newGame(['necropole', 'havre']);
+    const { game, a, b } = newGame(['namtaru', 'siegfried']);
     const plague = place(game, a, 'squelettePestifere', 1, 0); // 1 attaque, infection 1
     const target = place(game, b, 'griffonLoyal', 0, 0);
     game.attack(a, plague.uid, { kind: 'unit', uid: target.uid });
@@ -749,8 +755,23 @@ describe('Game — abandon et événements', () => {
     expect(game.isAbandoned).toBe(true);
   });
 
+  it('décrit l\'issue d\'une partie classée une fois terminée', () => {
+    const { game, a } = newGame();
+    expect(game.outcome()).toBeNull();
+    game.leave(a);
+    expect(game.outcome()).toEqual({ gameId: 'g1', mode: 'pvp', winnerId: 'acc1', loserId: 'acc0' });
+  });
+
+  it('décrit l\'issue d\'une partie contre l\'IA pour le joueur', () => {
+    const game = Game.createAgainstAi({ id: 'g', seed: 1, player: { id: 'p', deck: 'siegfried', accountId: 'acc', name: 'Alice' } });
+    expect(game.player(0).name).toBe('Alice');
+    expect(game.player(1)).toMatchObject({ name: AI_PLAYER_NAME, accountId: null });
+    game.leave(0);
+    expect(game.outcome()).toEqual({ gameId: 'g', mode: 'ai', accountId: 'acc', won: false });
+  });
+
   it('retourne les événements visuels une seule fois', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu', 'autelDestruction']);
     playNow(game, a, 1, [{ kind: 'hand', index: 0 }]);
     expect(game.drainEvents()).toEqual([{ kind: 'damage', target: { kind: 'hero', player: b }, amount: 2 }]);
@@ -766,10 +787,13 @@ describe('Game — événements', () => {
   };
 
   it('mélange les 8 événements de chaque joueur et en met deux en jeu', () => {
-    const game = Game.create({ id: 'g', seed: 3, players: [{ id: 'p0', faction: 'havre', isAi: false }, { id: 'p1', faction: 'inferno', isAi: false }] });
+    const game = Game.create({ id: 'g', seed: 3, players: [
+      { id: 'p0', deck: 'siegfried', isAi: false, accountId: 'acc0', name: 'Joueur 0' },
+      { id: 'p1', deck: 'kalAzaar', isAi: false, accountId: 'acc1', name: 'Joueur 1' },
+    ] });
     expect(game.events).toHaveLength(2);
     expect(game.eventDeckCount).toBe(14);
-    const brought = [...FACTIONS.havre.events, ...FACTIONS.inferno.events];
+    const brought = [...DECKS.siegfried.events, ...DECKS.kalAzaar.events];
     game.events.forEach(id => expect(brought).toContain(id));
   });
 
@@ -832,7 +856,7 @@ describe('Game — événements', () => {
     setEvents(game, ['marketOfShadows', 'celebration']);
     readyToPlay(game, a, []);
     eventNow(game, a, 0);
-    expect(game.player(a).hp).toBe(HERO_HP - 1);
+    expect(game.player(a).hp).toBe(game.player(a).maxHp - 1);
     expect(game.player(a).hand).toHaveLength(1);
   });
 

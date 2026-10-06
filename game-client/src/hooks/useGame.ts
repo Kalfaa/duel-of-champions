@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GameSocket, openBrowserSocket, type SocketLike } from '../api/game-socket';
-import type { FactionId, GameView } from '../api/protocol';
+import { GameSocket, openBrowserSocket, UNAUTHENTICATED_CLOSE_CODE, type SocketLike } from '../api/game-socket';
+import type { DeckId, GameView } from '../api/protocol';
 import { countDrawnCards, type Draw } from '../game/draws';
 import { createFlashes, mergeFlashes, removeFlashes, type FlashMap } from '../game/flashes';
 import { findRemovedUnits, type Ghost } from '../game/ghosts';
@@ -40,12 +40,16 @@ export interface GameController {
   /** Cartes qui viennent d'être piochées, le temps de leur animation. */
   drawn: Draw | null;
   connectionError: string | null;
-  start(mode: GameMode, faction: FactionId): void;
+  start(mode: GameMode, deck: DeckId): void;
   leave(): void;
   click(click: Click): void;
 }
 
-export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameController {
+/**
+ * Partie en cours du joueur connecté. `onUnauthorized` est appelé si le serveur de jeu refuse
+ * le jeton d'accès (session expirée).
+ */
+export function useGame(token: string, onUnauthorized: () => void, openSocket: (token: string) => SocketLike = openBrowserSocket): GameController {
   const [screen, setScreen] = useState<Screen>('menu');
   const [view, setView] = useState<GameView | null>(null);
   const [ui, setUi] = useState<UiState>(EMPTY_UI);
@@ -72,9 +76,9 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
     lastViewRef.current = null;
   }, []);
 
-  const start = useCallback((mode: GameMode, faction: FactionId) => {
+  const start = useCallback((mode: GameMode, deck: DeckId) => {
     socketRef.current?.close();
-    const socket = new GameSocket(openSocket());
+    const socket = new GameSocket(openSocket(token));
     socketRef.current = socket;
     setConnectionError(null);
 
@@ -127,15 +131,16 @@ export function useGame(openSocket: () => SocketLike = openBrowserSocket): GameC
           break;
       }
     });
-    socket.onClose(() => {
+    socket.onClose(code => {
       if (socketRef.current !== socket) return;
       socketRef.current = null;
       reset();
-      setConnectionError('Connexion au serveur perdue.');
+      if (code === UNAUTHENTICATED_CLOSE_CODE) onUnauthorized();
+      else setConnectionError('Connexion au serveur perdue.');
     });
 
-    socket.send(mode === 'ai' ? { type: 'startAi', faction } : { type: 'findMatch', faction });
-  }, [openSocket, reset]);
+    socket.send(mode === 'ai' ? { type: 'startAi', deck } : { type: 'findMatch', deck });
+  }, [token, onUnauthorized, openSocket, reset]);
 
   const leave = useCallback(() => {
     const socket = socketRef.current;

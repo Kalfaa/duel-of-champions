@@ -1,5 +1,9 @@
+import type { MouseEvent } from 'react';
 import type { CardView, EventView, GameView, PlayerIndex, PlayerView, UnitView } from '../api/protocol';
-import { ArtFallback, artStyle, cls, hpFillStyle, keywordList, onRightClick, ReqBadges, SchoolBadges, schoolIcon, StatBadges, typeLabel } from './common';
+import {
+  ArtFallback, artStyle, cls, ExpansionMark, FactionCrest, hpFillStyle, keywordList, onRightClick, RarityGem, ReqBadges, SchoolBadges,
+  StatBadges, typeLabel,
+} from './common';
 
 /** Carte à inspecter : un élément de la main ou du plateau, un événement en jeu, ou une carte isolée (cimetière, choix). */
 export type Inspect =
@@ -46,16 +50,23 @@ function unitStatus(u: UnitView): string[] {
   const r: string[] = [];
   if (u.stack > 1) r.push(`📚 Pile de ${u.stack}`);
   if (u.poison) r.push(`☠️ Poison ${u.poison}`);
+  if (u.cripple) r.push(`🦵 Estropiement ${u.cripple}`);
+  if (u.boost) r.push(`⬆️ +${u.boost} en attaque`);
+  if (u.enrage) r.push(`😡 Rage ${u.enrage}`);
+  if (u.cannotAttack) r.push('🚫 Ne peut pas attaquer ce tour-ci');
+  if (u.immobilized) r.push('⛓️ Immobilisée');
   if (u.enchantments.length) r.push(`✨ ${u.enchantments.join(', ')}`);
   return r;
 }
 
-function CardBody({ card, owner, unit }: { card: CardView; owner?: PlayerView; unit?: UnitView }) {
+export function CardBody({ card, owner, unit }: { card: CardView; owner?: PlayerView; unit?: UnitView }) {
   const keywords = keywordList(unit?.keywords ?? card.keywords);
   return (
     <div className={cls('icard', card.type)}>
       <div className="icard-art" style={artStyle(card.art)}><ArtFallback art={card.art} icon={card.icon} /></div>
       <div className="icard-name">{card.name}</div>
+      <RarityGem rarity={card.rarity} />
+      <FactionCrest faction={card.faction} school={card.school} />
       <div className="icard-cost">{card.cost}</div>
       <div className="icard-reqs"><ReqBadges req={card.req} player={owner} /></div>
       {card.type === 'creature' && (unit
@@ -69,12 +80,13 @@ function CardBody({ card, owner, unit }: { card: CardView; owner?: PlayerView; u
           {!keywords.length && !card.text && <p className="icard-none">Aucune capacité.</p>}
           {unit && unitStatus(unit).map(s => <p key={s} className="icard-status">{s}</p>)}
         </div>
+        <ExpansionMark expansion={card.expansion} />
       </div>
     </div>
   );
 }
 
-function HeroBody({ player }: { player: PlayerView }) {
+export function HeroBody({ player }: { player: PlayerView }) {
   const { hero } = player;
   // Comme sur la carte officielle, la bannière ne montre que les caractéristiques non nulles
   const base = Object.fromEntries(Object.entries(hero.base).filter(([, v]) => v > 0));
@@ -82,26 +94,28 @@ function HeroBody({ player }: { player: PlayerView }) {
     <div className="icard hero">
       <div className="icard-art" style={artStyle(hero.art)}><ArtFallback art={hero.art} icon={hero.icon} /></div>
       <div className="icard-name">{hero.name}</div>
+      <RarityGem rarity={hero.rarity} />
+      <FactionCrest faction={{ id: player.faction, label: player.factionLabel }} />
       <div className="icard-reqs icard-base" title="Caractéristiques de départ"><ReqBadges req={base} /></div>
       <SchoolBadges schools={hero.schools} />
       <div className="ust"><span className="b hp" style={hpFillStyle(player.hp, player.maxHp)} title={`Points de vie : ${player.hp}/${player.maxHp}`}>{player.hp}</span></div>
       <div className="icard-box">
         <div className="icard-type">Héros – {player.factionLabel}</div>
         <div className="icard-text">
-          {hero.schools.length > 0 && <p><b>Magie</b> : {hero.schools.map(s => `${schoolIcon(s)} ${s}`).join(', ')}</p>}
-          <p><b>✨ {hero.power.name} · {hero.power.cost}💎</b> ({hero.power.text})</p>
-          <p className="icard-status">Deck {player.deckCount} · Main {player.handCount} · Cimetière {player.grave.length}</p>
-        </div>
+          {hero.power && <p><b>✨ {hero.power.name} · {hero.power.cost}💎</b> ({hero.power.text})</p>}
+          {hero.passive && <p><b>♾️ {hero.passive.name}</b> ({hero.passive.text})</p>}        </div>
+        <ExpansionMark expansion={hero.expansion} />
       </div>
     </div>
   );
 }
 
-function EventBody({ event, leaving }: { event: EventView; leaving: boolean }) {
+export function EventBody({ event, leaving }: { event: EventView; leaving: boolean }) {
   return (
     <div className="icard event">
       <div className="icard-art" style={artStyle(event.art)}><ArtFallback art={event.art} icon={event.icon} /></div>
       <div className="icard-name">{event.name}</div>
+      <RarityGem rarity={event.rarity} />
       {event.cost !== null && <div className="icard-cost">{event.cost}</div>}
       <div className="icard-box">
         <div className="icard-type">Événement{event.ongoing ? ' – Permanent' : ''}</div>
@@ -111,7 +125,34 @@ function EventBody({ event, leaving }: { event: EventView; leaving: boolean }) {
           {event.used && <p className="icard-status">Déjà utilisé ce tour-ci.</p>}
           {leaving && <p className="icard-status">⌛ Quitte le jeu à la fin du tour.</p>}
         </div>
+        <ExpansionMark expansion={event.expansion} />
       </div>
+    </div>
+  );
+}
+
+function InspectedBody({ inspected }: { inspected: Inspected }) {
+  return inspected.kind === 'hero' ? <HeroBody player={inspected.player} />
+    : inspected.kind === 'event' ? <EventBody event={inspected.event} leaving={inspected.leaving} />
+    : <CardBody {...inspected} />;
+}
+
+/** Signale la carte survolée (null quand la souris la quitte). */
+export type Hover = (target: Inspect | null) => void;
+
+/** Gestionnaires de survol d'une carte : son aperçu s'affiche tant que la souris est dessus. */
+export const hoverHandlers = (onHover: Hover | undefined, target: Inspect) => ({
+  onMouseEnter: () => onHover?.(target),
+  onMouseLeave: () => onHover?.(null),
+});
+
+/** Aperçu au survol : la carte exactement comme quand on l'inspecte, en plus petit, à gauche de l'écran. */
+export function CardPreview({ view, target }: { view: GameView; target: Inspect }) {
+  const inspected = resolveInspect(view, target);
+  if (!inspected) return null;
+  return (
+    <div className="hover-preview" aria-hidden>
+      <InspectedBody inspected={inspected} />
     </div>
   );
 }
@@ -128,9 +169,7 @@ export function CardInspector({ view, target, onClose }: Props) {
   if (!inspected) return null;
   return (
     <div className="inspect" onClick={onClose} onContextMenu={onRightClick(onClose)}>
-      {inspected.kind === 'hero' ? <HeroBody player={inspected.player} />
-        : inspected.kind === 'event' ? <EventBody event={inspected.event} leaving={inspected.leaving} />
-        : <CardBody {...inspected} />}
+      <InspectedBody inspected={inspected} />
       <div className="inspect-hint">Clic ou Échap pour fermer</div>
     </div>
   );

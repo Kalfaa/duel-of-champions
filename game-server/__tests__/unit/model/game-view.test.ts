@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayerView } from '../../../src/model/game-view';
 import { STARTING_HAND } from '../../../src/model/game';
-import { FACTIONS } from '../../../src/model/factions';
+import { DECKS } from '../../../src/model/decks';
 import { newGame, place, readyToPlay, setEvents, state, unit } from './helpers';
 
 describe('buildPlayerView', () => {
@@ -14,6 +14,11 @@ describe('buildPlayerView', () => {
     expect(view.players[b].handCount).toBe(STARTING_HAND);
   });
 
+  it('affiche le nom des deux joueurs', () => {
+    const { game, a } = newGame();
+    expect(buildPlayerView(game, a).players.map(p => p.name)).toEqual(['Joueur 0', 'Joueur 1']);
+  });
+
   it('montre les cimetières des deux joueurs', () => {
     const { game, a, b } = newGame();
     state(game, b).grave = ['traitFeu', 'cerbere'];
@@ -22,11 +27,35 @@ describe('buildPlayerView', () => {
     }
   });
 
+  it('indique la rareté, la faction et l\'extension des cartes', () => {
+    const { game, a } = newGame();
+    state(game, a).grave = ['traitFeu', 'autelDestruction'];
+    const [spell, fortune] = buildPlayerView(game, a).players[a].grave;
+    expect(spell).toMatchObject({ rarity: 'common', faction: null, school: 'Feu', expansion: { name: 'Édition de base' } });
+    expect(fortune).toMatchObject({ rarity: 'common', faction: { id: 'inferno', label: 'Inferno', icon: '🔥' } });
+  });
+
+  it('montre l\'attaque et la riposte actuelles des créatures, estropiement et bonus compris', () => {
+    const { game, a } = newGame();
+    const captain = place(game, a, 'capitaineLoup', 0, 1);
+    place(game, a, 'griffonLoyal', 0, 0);
+    captain.cripple = 1;
+    const view = buildPlayerView(game, a).players[a].board[0]![1]!;
+    expect(view).toMatchObject({ atk: 1, ret: 0, cripple: 1 });
+  });
+
+  it('indique la rareté et l\'extension de chaque héros', () => {
+    const { game, a, b } = newGame();
+    for (const pi of [a, b]) {
+      expect(buildPlayerView(game, a).players[pi].hero).toMatchObject({ rarity: 'heroic', expansion: { name: 'Édition de base' } });
+    }
+  });
+
   it('indique les écoles de magie de chaque héros', () => {
     const { game, a, b } = newGame();
     const view = buildPlayerView(game, a);
     for (const pi of [a, b]) {
-      expect(view.players[pi].hero.schools).toEqual([...FACTIONS[state(game, pi).faction].hero.schools]);
+      expect(view.players[pi].hero.schools).toEqual([...DECKS[state(game, pi).deckId].hero.schools]);
     }
   });
 
@@ -46,7 +75,7 @@ describe('buildPlayerView', () => {
     expect(options.canEndTurn).toBe(true);
     expect(options.hand[0]).toEqual({
       cost: 1, playable: true, reason: null,
-      steps: [{ prompt: 'Choisissez la créature à soigner.', options: [unit(ally), unit(enemy)], labels: null, cards: null, distinctFrom: null }],
+      steps: [{ prompt: 'Choisissez la créature à soigner.', options: [unit(ally), unit(enemy)], labels: null, cards: null, distinctFrom: null, after: null }],
     });
     expect(options.hand[1]).toMatchObject({ playable: true, steps: [] });
     expect(options.hand[2]!.steps[0]).toMatchObject({ labels: ['Piocher une carte', 'Gagner 4 ressources'], options: [{ kind: 'mode', index: 0 }] });
@@ -70,7 +99,7 @@ describe('buildPlayerView', () => {
     const stack = place(game, a, 'arbaletrierImperial', 1, 0);
     stack.stack = 2;
     stack.poison = 1;
-    stack.enchantments = [{ cardId: 'benediction', owner: a }];
+    stack.enchantments = [{ cardId: 'benediction', owner: a, atk: 2, ret: 0, keywords: {} }];
     expect(buildPlayerView(game, a).players[a].board[1]![0]).toMatchObject({ stack: 2, poison: 1, enchantments: ['Bénédiction'] });
   });
 
@@ -86,7 +115,7 @@ describe('buildPlayerView', () => {
   });
 
   it('montre à chaque joueur la carte jouée en attente, sans options pendant ce temps', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const enemy = place(game, b, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['traitFeu']);
     game.playCard(a, 0, [unit(enemy)]);
@@ -98,7 +127,7 @@ describe('buildPlayerView', () => {
   });
 
   it('montre le pouvoir du héros en attente de résolution', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     const enemy = place(game, b, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['traitFeu']);
     game.usePower(a, [{ kind: 'hand', index: 0 }, unit(enemy)]);
@@ -109,7 +138,7 @@ describe('buildPlayerView', () => {
   });
 
   it('ne révèle pas les cartes choisies dans la main', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu', 'autelDestruction']);
     game.playCard(a, 1, [{ kind: 'hand', index: 0 }]);
     expect(buildPlayerView(game, b).pending?.choices).toEqual([]);
@@ -124,13 +153,22 @@ describe('buildPlayerView', () => {
     expect(option.steps).toEqual([]);
   });
 
+  it('indique l\'extension d\'où vient chaque événement', () => {
+    const { game, a } = newGame();
+    setEvents(game, ['fallenWolf', 'hailStorm']);
+    expect(buildPlayerView(game, a).events.map(e => e.expansion.name)).toEqual(['Ascension du vide', 'Herald of the Void']);
+  });
+
   it('montre les événements en jeu, leur utilisation et l\'événement révélé', () => {
     const { game, a } = newGame();
     setEvents(game, ['celebration', 'manaStorm']);
     state(game, a).res = 5;
     let view = buildPlayerView(game, a);
     expect(view.events).toEqual([
-      { id: 'celebration', name: 'Fête', icon: '🎉', art: 'Celebrations', text: 'Chaque joueur pioche une carte.', cost: 2, ongoing: false, used: false },
+      {
+        id: 'celebration', name: 'Fête', rarity: 'common', expansion: { name: 'Édition de base', image: 'base' },
+        icon: '🎉', art: 'Celebrations', text: 'Chaque joueur pioche une carte.', cost: 2, ongoing: false, used: false,
+      },
       expect.objectContaining({ id: 'manaStorm', cost: null, ongoing: true }),
     ]);
     expect(view.eventDeckCount).toBe(14);

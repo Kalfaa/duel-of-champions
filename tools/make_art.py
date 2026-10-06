@@ -8,7 +8,8 @@ SRC = ROOT / "img" / "cards"
 ART = ROOT / "game-client" / "public" / "img" / "art"
 BG = ROOT / "game-client" / "public" / "img" / "bg"
 LOGO_CUT = 0.80  # the bottom ~20% of every artwork holds the Duel of Champions logo
-BACKGROUNDS = {"havre": "Sun_crusader_card.jpg", "necropole": "Ghost_dragon_card.jpg", "inferno": "Abyssal_lord_card.jpg"}
+BACKGROUNDS = {"havre": "Sun_crusader_card.jpg", "necropole": "Ghost_dragon_card.jpg", "inferno": "Abyssal_lord_card.jpg",
+               "sanctuaire": "Sacred_kirin_card.jpg", "bastion": "Wyvern_rider.jpg"}
 
 
 def crop(im):

@@ -87,6 +87,48 @@ describe('handleClick', () => {
       .toEqual({ type: 'play', handIndex: 0, choices: [{ kind: 'unit', uid: 7 }] });
   });
 
+  it('cible un couloir en cliquant sur une de ses cases, de n\'importe quel côté', () => {
+    const v = view({ options: mainOptions({ hand: [playable(step([0, 1, 2, 3].map(lane => ({ kind: 'lane' as const, lane }))))] }) });
+    const ui: UiState = { selection: { kind: 'hand', index: 0, choices: [] }, message: '' };
+    expect(handleClick(v, ui, { kind: 'slot', player: 1, row: 1, lane: 2 }).action)
+      .toEqual({ type: 'play', handIndex: 0, choices: [{ kind: 'lane', lane: 2 }] });
+  });
+
+  it('Déjouer : choisit une créature ennemie, puis sa nouvelle case parmi celles qui lui sont permises', () => {
+    const board = [[unit(7), null, null, null], [null, null, null, null]];
+    const to = { kind: 'cell' as const, player: 1 as const, row: 0, lane: 3 };
+    const destination = step([], {
+      after: [{ previous: [{ kind: 'slot', row: 0, lane: 0 }, { kind: 'unit', uid: 7 }], options: [{ kind: 'cell', player: 1, row: 0, lane: 0 }, to] }],
+    });
+    const v = view({
+      players: [player(), player({ board, hand: null })],
+      options: mainOptions({ hand: [playable(step([{ kind: 'slot', row: 0, lane: 0 }]), step([{ kind: 'unit', uid: 7 }]), destination)] }),
+    });
+    const ui: UiState = { selection: { kind: 'hand', index: 0, choices: [{ kind: 'slot', row: 0, lane: 0 }, { kind: 'unit', uid: 7 }] }, message: '' };
+    expect([...highlights(v, ui.selection).slots]).toEqual(['1-0-0', '1-0-3']);
+    expect(handleClick(v, ui, { kind: 'slot', player: 1, row: 1, lane: 3 }).action).toBeNull();
+    expect(handleClick(v, ui, { kind: 'slot', player: 1, row: 0, lane: 3 }).action)
+      .toEqual({ type: 'play', handIndex: 0, choices: [{ kind: 'slot', row: 0, lane: 0 }, { kind: 'unit', uid: 7 }, to] });
+  });
+
+  it('choisit une carte permanente en jeu en cliquant dessus', () => {
+    const v = view({ options: mainOptions({ hand: [playable(step([{ kind: 'lasting', index: 1 }]))] }) });
+    const ui: UiState = { selection: { kind: 'hand', index: 0, choices: [] }, message: '' };
+    expect(highlights(v, ui.selection).lasting.has(1)).toBe(true);
+    expect(handleClick(v, ui, { kind: 'lasting', index: 0 }).action).toBeNull();
+    expect(handleClick(v, ui, { kind: 'lasting', index: 1 }).action).toEqual({ type: 'play', handIndex: 0, choices: [{ kind: 'lasting', index: 1 }] });
+  });
+
+  it('pendant un choix après résolution, envoie l\'option cliquée (bouton ou créature), et rien d\'autre', () => {
+    const board = [[unit(7), null, null, null], [null, null, null, null]];
+    const pick = { prompt: 'Choisissez.', labels: ['Terminer'], cards: [], options: [{ kind: 'mode' as const, index: 0 }, { kind: 'unit' as const, uid: 7 }] };
+    const v = view({ players: [player(), player({ board, hand: null })], options: null, pick });
+    expect(handleClick(v, EMPTY_UI, { kind: 'slot', player: 1, row: 0, lane: 0 }).action).toEqual({ type: 'pick', choice: { kind: 'unit', uid: 7 } });
+    expect(handleClick(v, EMPTY_UI, { kind: 'pick', choice: { kind: 'mode', index: 0 } }).action).toEqual({ type: 'pick', choice: { kind: 'mode', index: 0 } });
+    expect(handleClick(v, EMPTY_UI, { kind: 'endTurn' }).action).toBeNull();
+    expect([...highlights(v, null).units]).toEqual([7]);
+  });
+
   it('cible une ligne entière en cliquant sur une de ses cases', () => {
     const v = view({ options: mainOptions({ hand: [playable(step([{ kind: 'line', player: 1, row: 0 }, { kind: 'line', player: 1, row: 1 }]))] }) });
     const ui: UiState = { selection: { kind: 'hand', index: 0, choices: [] }, message: '' };

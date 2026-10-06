@@ -2,11 +2,11 @@
   "name": "duel-of-champions",
   "private": true,
   "scripts": {
-    "postinstall": "npm install --prefix game-server && npm install --prefix game-client",
-    "dev": "concurrently --kill-others-on-fail -n server,client -c blue,magenta \"npm run dev --prefix game-server\" \"npm run dev --prefix game-client\"",
-    "share": "npm run build --prefix game-client && concurrently --kill-others -n server,client,ngrok -c blue,magenta,green \"PORT=3100 npm start --prefix game-server\" \"GAME_SERVER_URL=http://localhost:3100 npm run preview --prefix game-client -- --port 4173 --strictPort\" \"node --env-file-if-exists=.env scripts/share.mjs\"",
-    "test": "npm test --prefix game-server && npm test --prefix game-client",
-    "typecheck": "npm run typecheck --prefix game-server && npm run typecheck --prefix game-client"
+    "postinstall": "npm install --prefix account-server && npm install --prefix game-server && npm install --prefix game-client",
+    "dev": "concurrently --kill-others-on-fail -n accounts,server,client -c yellow,blue,magenta \"npm run dev --prefix account-server\" \"npm run dev --prefix game-server\" \"npm run dev --prefix game-client\"",
+    "share": "npm run build --prefix game-client && concurrently --kill-others -n accounts,server,client,ngrok -c yellow,blue,magenta,green \"PORT=3101 npm start --prefix account-server\" \"PORT=3100 ACCOUNT_SERVER_URL=http://localhost:3101 npm start --prefix game-server\" \"GAME_SERVER_URL=http://localhost:3100 ACCOUNT_SERVER_URL=http://localhost:3101 npm run preview --prefix game-client -- --port 4173 --strictPort\" \"node --env-file-if-exists=.env scripts/share.mjs\"",
+    "test": "npm test --prefix account-server && npm test --prefix game-server && npm test --prefix game-client",
+    "typecheck": "npm run typecheck --prefix account-server && npm run typecheck --prefix game-server && npm run typecheck --prefix game-client"
   },
   "devDependencies": {
     "@ngrok/ngrok": "^1.7.0",

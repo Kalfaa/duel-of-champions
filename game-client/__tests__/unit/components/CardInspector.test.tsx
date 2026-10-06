@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CardInspector, resolveInspect, type Inspect } from '../../../src/components/CardInspector';
+import { CardInspector, CardPreview, resolveInspect, type Inspect } from '../../../src/components/CardInspector';
 import { card, gameEvent, player, unit, view } from '../fixtures';
 
 const render = (v: ReturnType<typeof view>, target: Inspect) =>
@@ -16,6 +16,23 @@ describe('CardInspector', () => {
     expect(html).toContain('<b>Régénération 2</b> (Au ravitaillement, soigne 2.)');
     expect(html).toContain('Bénit ses voisines.');
     expect(html).toContain('class="sb g miss"');
+  });
+
+  it('affiche la rareté, la faction et l\'extension de la carte', () => {
+    const html = render(view(), { kind: 'card', card: card({ rarity: 'rare' }) });
+    expect(html).toContain('<span class="rarity rare" title="Rareté : Rare"></span>');
+    expect(html).toContain('<div class="crest" title="Faction : Havre"><img class="faction-icon" src="/img/faction/havre.webp" alt="Havre"/></div>');
+    expect(html).toContain('<img class="expansion" src="/img/expansion/base.png" alt="Édition de base" title="Extension : Édition de base"/>');
+  });
+
+  it('marque une carte sans faction comme neutre', () => {
+    const html = render(view(), { kind: 'card', card: card({ type: 'fortune', faction: null }) });
+    expect(html).toContain('<div class="crest" title="Faction : Neutre"><img class="faction-icon" src="/img/faction/neutre.webp" alt="Neutre"/></div>');
+  });
+
+  it('montre l\'école de magie d\'un sort à la place de la faction', () => {
+    const html = render(view(), { kind: 'card', card: card({ type: 'spell', school: 'Feu', faction: null }) });
+    expect(html).toContain('<div class="crest school-crest" title="École de magie : Feu"><img class="school-icon" src="/img/school/feu.webp" alt="Feu"/></div>');
   });
 
   it('montre les caractéristiques actuelles et l\'état d\'une créature du plateau', () => {
@@ -34,6 +51,9 @@ describe('CardInspector', () => {
     expect(html).toContain('<span class="sb m" title="Puissance 2">2</span>');
     expect(html).toContain('<span class="sb d" title="Destinée 1">1</span>');
     expect(html).not.toContain('title="Magie 0"');
+    expect(html).toContain('<span class="rarity heroic" title="Rareté : Héroïque"></span>');
+    expect(html).toContain('title="Faction : Inferno"><img class="faction-icon" src="/img/faction/inferno.webp"');
+    expect(html).toContain('title="Extension : Édition de base"');
   });
 
   it('ne s\'affiche plus quand la carte inspectée a disparu', () => {
@@ -46,8 +66,19 @@ describe('CardInspector', () => {
     expect(html).toContain('class="icard event"');
     expect(html).toContain('Chaque joueur pioche une carte.');
     expect(html).toContain('Quitte le jeu à la fin du tour.');
+    expect(html).toContain('<span class="rarity common" title="Rareté : Commune"></span>');
+    expect(html).toContain('title="Extension : Édition de base"');
     const ongoing = render(view({ events: [gameEvent(), gameEvent({ cost: null, ongoing: true })] }), { kind: 'event', slot: 1 });
     expect(ongoing).toContain('Événement – Permanent');
     expect(ongoing).not.toContain('icard-cost');
+  });
+
+  it('affiche au survol un aperçu identique à l\'inspection, sans pouvoir être cliqué', () => {
+    const v = view({ players: [player({ hand: [card({ name: 'Griffon loyal' })], handCount: 1 }), player({ hand: null })] });
+    const html = renderToStaticMarkup(<CardPreview view={v} target={{ kind: 'hand', index: 0 }} />);
+    expect(html).toContain('class="hover-preview"');
+    expect(html).toContain('class="icard creature"');
+    expect(html).toContain('Griffon loyal');
+    expect(renderToStaticMarkup(<CardPreview view={v} target={{ kind: 'hand', index: 5 }} />)).toBe('');
   });
 });

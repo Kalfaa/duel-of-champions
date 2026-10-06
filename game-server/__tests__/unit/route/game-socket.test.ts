@@ -14,7 +14,7 @@ describe('handleClientMessage', () => {
 
   beforeEach(() => {
     service = {
-      listFactions: vi.fn(), connect: vi.fn(), disconnect: vi.fn(),
+      listDecks: vi.fn(), connect: vi.fn(), disconnect: vi.fn(),
       startAiGame: vi.fn(async () => {}), findMatch: vi.fn(async () => {}), act: vi.fn(async () => {}), leave: vi.fn(async () => {}),
     };
     sent = [];
@@ -22,13 +22,13 @@ describe('handleClientMessage', () => {
   });
 
   it('démarre une partie contre l\'IA', async () => {
-    await call({ type: 'startAi', faction: 'inferno' });
-    expect(service.startAiGame).toHaveBeenCalledWith('p1', 'inferno');
+    await call({ type: 'startAi', deck: 'kalAzaar' });
+    expect(service.startAiGame).toHaveBeenCalledWith('p1', 'kalAzaar');
   });
 
   it('lance la recherche d\'adversaire', async () => {
-    await call({ type: 'findMatch', faction: 'havre' });
-    expect(service.findMatch).toHaveBeenCalledWith('p1', 'havre');
+    await call({ type: 'findMatch', deck: 'siegfried' });
+    expect(service.findMatch).toHaveBeenCalledWith('p1', 'siegfried');
   });
 
   it('transmet une action de jeu valide', async () => {
@@ -48,7 +48,7 @@ describe('handleClientMessage', () => {
   });
 
   it.each([
-    { type: 'startAi', faction: 'sylvan' },
+    { type: 'startAi', deck: 'sylvan' },
     { type: 'action', action: { type: 'move', uid: 1, to: { row: 2, lane: 0 } } },
     { type: 'inconnu' },
   ])('rejette un message invalide : %j', async message => {

@@ -29,6 +29,10 @@ export type Click =
   | { kind: 'hero'; player: PlayerIndex }
   | { kind: 'power' }
   | { kind: 'event'; slot: number }
+  /** Une carte permanente en jeu. */
+  | { kind: 'lasting'; index: number }
+  /** Une option du choix après résolution. */
+  | { kind: 'pick'; choice: Choice }
   /** Une option choisie dans la fenêtre de choix (mode, carte de la bibliothèque ou du cimetière). */
   | { kind: 'choose'; choice: Choice }
   | { kind: 'develop'; choice: DevelopChoice }
@@ -69,8 +73,17 @@ export function currentStep(view: GameView, selection: Selection): StepView | nu
   return stepsOf(view.options, selection)[selection.choices.length] ?? null;
 }
 
+const samePrefix = (a: readonly Choice[], b: readonly Choice[]): boolean =>
+  a.length === b.length && a.every((c, i) => sameChoice(c, b[i]!));
+
+/** Options de l'étape compte tenu des choix déjà faits (une étape peut dépendre des précédentes). */
+export function stepOptions(step: StepView, choices: readonly Choice[]): Choice[] {
+  if (!step.after) return step.options;
+  return step.after.find(a => samePrefix(a.previous, choices))?.options ?? [];
+}
+
 const allowed = (step: StepView, choices: readonly Choice[], c: Choice): boolean =>
-  includes(step.options, c) && (step.distinctFrom === null || !sameChoice(c, choices[step.distinctFrom]!));
+  includes(stepOptions(step, choices), c) && (step.distinctFrom === null || !sameChoice(c, choices[step.distinctFrom]!));
 
 /** Ajoute un choix : l'action est envoyée quand toutes les étapes sont remplies, sinon la suivante est demandée. */
 function advance(options: TurnOptions, selection: Casting, choice: Choice | null): ClickResult {
@@ -81,10 +94,28 @@ function advance(options: TurnOptions, selection: Casting, choice: Choice | null
   return say(`${next.prompt} (clic droit pour annuler)`, { ...selection, choices });
 }
 
+/**
+ * Pendant un choix après résolution, seuls les clics sur une option proposée comptent : bouton de la fenêtre de choix,
+ * créature, case ou carte permanente.
+ */
+function pickClick(options: readonly Choice[], view: GameView, click: Click): ClickResult | null {
+  const candidates: Choice[] = [];
+  if (click.kind === 'pick' || click.kind === 'choose') candidates.push(click.choice);
+  if (click.kind === 'lasting') candidates.push({ kind: 'lasting', index: click.index });
+  if (click.kind === 'slot') {
+    const unit = view.players[click.player].board[click.row]?.[click.lane];
+    if (unit) candidates.push({ kind: 'unit', uid: unit.uid });
+    candidates.push({ kind: 'cell', player: click.player, row: click.row, lane: click.lane });
+  }
+  const choice = candidates.find(c => includes(options, c));
+  return choice ? act({ type: 'pick', choice }) : null;
+}
+
 /** Traduit un clic en nouvel état d'interface et, le cas échéant, en action de jeu. */
 export function handleClick(view: GameView, ui: UiState, click: Click): ClickResult {
   const unchanged: ClickResult = { ui, action: null };
   if (click.kind === 'cancel') return { ui: EMPTY_UI, action: null };
+  if (view.pick) return pickClick(view.pick.options, view, click) ?? unchanged;
   const options = view.options;
   if (!options) return unchanged;
   const selection = ui.selection;
@@ -112,6 +143,12 @@ export function handleClick(view: GameView, ui: UiState, click: Click): ClickRes
 
     case 'choose':
       return choose(click.choice) ?? unchanged;
+
+    case 'lasting':
+      return choose({ kind: 'lasting', index: click.index }) ?? unchanged;
+
+    case 'pick':
+      return unchanged;
 
     case 'hand': {
       const chosen = choose({ kind: 'hand', index: click.index });
@@ -154,7 +191,7 @@ export function handleClick(view: GameView, ui: UiState, click: Click): ClickRes
         const candidates: Choice[] = [];
         if (unit) candidates.push({ kind: 'unit', uid: unit.uid });
         if (mine) candidates.push({ kind: 'slot', row, lane });
-        candidates.push({ kind: 'line', player, row });
+        candidates.push({ kind: 'cell', player, row, lane }, { kind: 'lane', lane }, { kind: 'line', player, row });
         return choose(...candidates) ?? unchanged;
       }
       if (unit) {
@@ -184,26 +221,36 @@ export interface Highlights {
   heroes: Set<PlayerIndex>;
   /** Cartes de la main que l'on peut choisir. */
   hand: Set<number>;
+  /** Cartes permanentes en jeu que l'on peut choisir (par position). */
+  lasting: Set<number>;
 }
 
 export const slotKey = (player: PlayerIndex, row: number, lane: number): string => `${player}-${row}-${lane}`;
 
 const LANES = [0, 1, 2, 3] as const;
+const ROWS = [0, 1] as const;
 
 /** Cases, créatures, héros et cartes de la main à mettre en évidence pour la sélection en cours. */
 export function highlights(view: GameView, selection: Selection): Highlights {
-  const h: Highlights = { slots: new Set(), units: new Set(), heroes: new Set(), hand: new Set() };
+  const h: Highlights = { slots: new Set(), units: new Set(), heroes: new Set(), hand: new Set(), lasting: new Set() };
   const add = (choices: readonly Choice[], slotOwner: PlayerIndex = view.you) => {
     for (const c of choices) {
       if (c.kind === 'slot') h.slots.add(slotKey(slotOwner, c.row, c.lane));
       else if (c.kind === 'unit') h.units.add(c.uid);
       else if (c.kind === 'hero') h.heroes.add(c.player);
+      else if (c.kind === 'cell') h.slots.add(slotKey(c.player, c.row, c.lane));
       else if (c.kind === 'line') LANES.forEach(lane => h.slots.add(slotKey(c.player, c.row, lane)));
+      else if (c.kind === 'lane') ([0, 1] as const).forEach(p => ROWS.forEach(row => h.slots.add(slotKey(p, row, c.lane))));
       else if (c.kind === 'hand') h.hand.add(c.index);
+      else if (c.kind === 'lasting') h.lasting.add(c.index);
     }
   };
   // Pendant la révélation d'une carte, ses choix sont montrés aux deux joueurs
   if (view.pending) add(view.pending.choices, view.pending.player);
+  if (view.pick) {
+    add(view.pick.options);
+    return h;
+  }
   const options = view.options;
   if (!options || !selection) return h;
   if (selection.kind === 'heroMenu') return h;
@@ -214,6 +261,6 @@ export function highlights(view: GameView, selection: Selection): Highlights {
     return h;
   }
   const step = currentStep(view, selection);
-  if (step) add(step.options.filter(c => allowed(step, selection.choices, c)));
+  if (step) add(stepOptions(step, selection.choices).filter(c => allowed(step, selection.choices, c)));
   return h;
 }

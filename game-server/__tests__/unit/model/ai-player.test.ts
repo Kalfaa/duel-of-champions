@@ -14,7 +14,7 @@ describe('AiPlayer', () => {
   });
 
   it('préfère le pouvoir héroïque quand il est rentable', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     readyToPlay(game, a, ['traitFeu']);
     const wounded = place(game, b, 'griffonLoyal', 0, 0);
     wounded.hpCur = 2;
@@ -29,7 +29,7 @@ describe('AiPlayer', () => {
   });
 
   it('achève le héros adverse avec une carte quand il le peut', () => {
-    const { game, a, b } = newGame(['inferno', 'havre']);
+    const { game, a, b } = newGame(['kalAzaar', 'siegfried']);
     place(game, b, 'griffonLoyal', 0, 0);
     readyToPlay(game, a, ['autelDestruction', 'traitFeu']);
     state(game, a).heroActionUsed = true;
@@ -57,15 +57,27 @@ describe('AiPlayer', () => {
   });
 
   it.each([
-    ['necropole', 'inferno'],
-    ['havre', 'necropole'],
-    ['inferno', 'havre'],
-  ] as const)('joue une partie complète %s contre %s sans coup illégal', (f1, f2) => {
-    const { game } = newGame([f1, f2], 123);
+    ['namtaru', 'kalAzaar'],
+    ['siegfried', 'namtaru'],
+    ['kalAzaar', 'siegfried'],
+    ['ishuma', 'kaiko'],
+    ['takana', 'yukiko'],
+    ['kaiko', 'namtaru'],
+    ['yukiko', 'siegfried'],
+    ['takana', 'ishuma'],
+    ['kat', 'namtaru'],
+    ['yukiko', 'kat'],
+    ['alia', 'dhamiria'],
+    ['adarMalik', 'noboru'],
+    ['zardoc', 'alia'],
+    ['dhamiria', 'zardoc'],
+    ['noboru', 'adarMalik'],
+  ] as const)('joue une partie complète %s contre %s sans coup illégal', (d1, d2) => {
+    const { game } = newGame([d1, d2], 123);
     for (let i = 0; i < 3000 && !game.isOver; i++) {
       game.apply(game.current, ai.chooseAction(game, game.current));
       if (game.pending) game.resolvePending();
-      if (game.hasPendingRetaliation) game.resolveRetaliation();
+      while (game.hasPendingRetaliation) game.resolveRetaliation();
     }
     expect(game.isOver).toBe(true);
     expect(game.winner).not.toBeNull();

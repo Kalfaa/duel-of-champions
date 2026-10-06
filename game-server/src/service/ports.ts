@@ -6,6 +6,12 @@ export type GameNotification =
   | { type: 'waiting' }
   | { type: 'state'; view: PlayerGameView; events: GameEvent[] };
 
+/** Joueur authentifié par son jeton d'accès. */
+export interface PlayerIdentity {
+  accountId: string;
+  name: string;
+}
+
 /** Canal vers un joueur connecté (implémenté par la couche route au-dessus d'un WebSocket). */
 export interface IPlayerChannel {
   send(notification: GameNotification): void;

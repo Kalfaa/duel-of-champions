@@ -1,8 +1,10 @@
 import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { SignJWT } from 'jose';
 import WebSocket from 'ws';
 import { buildApp } from '../../src/container';
+import type { IAccountClient, MatchReport } from '../../src/integration/account-client';
 import type { PlayerGameView } from '../../src/model/game-view';
 import type { ServerMessage } from '../../src/route/protocol';
 
@@ -63,20 +65,40 @@ class TestClient {
   }
 }
 
+const JWT_SECRET = 'secret-de-test';
+
+/** Jeton tel que le délivre le serveur de comptes. */
+const tokenFor = (accountId: string, name: string, secret = JWT_SECRET) =>
+  new SignJWT({ name }).setProtectedHeader({ alg: 'HS256' }).setSubject(accountId).setIssuer('duel-of-champions')
+    .setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+
+/** Ouvre un WebSocket et attend sa fermeture par le serveur. */
+const closeCodeOf = (url: string) => new Promise<number>(resolve => new WebSocket(url).once('close', code => resolve(code)));
+
 describe('parties via WebSocket', () => {
   let app: FastifyInstance;
   let wsUrl: string;
   let httpUrl: string;
+  let reports: MatchReport[];
   const clients: TestClient[] = [];
-  const connect = async () => {
-    const client = await TestClient.connect(wsUrl);
+  const connect = async (accountId = 'acc-alice', name = 'Alice') => {
+    const client = await TestClient.connect(`${wsUrl}?token=${await tokenFor(accountId, name)}`);
     clients.push(client);
     return client;
   };
 
   beforeEach(async () => {
     let seed = 1;
-    app = buildApp({ delays: { aiAction: 0, turnStart: 0, cardReveal: 0, retaliation: 0 }, seeds: { next: () => seed++ } });
+    reports = [];
+    // Faux serveur de comptes : garde les résultats reçus
+    const accountClient: IAccountClient = { reportMatch: async report => { reports.push(report); } };
+    app = buildApp({
+      delays: { aiAction: 0, turnStart: 0, cardReveal: 0, retaliation: 0 },
+      seeds: { next: () => seed++ },
+      jwtSecret: JWT_SECRET,
+      accountServer: { url: 'http://comptes.invalid', internalKey: 'cle' },
+      accountClient,
+    });
     await app.listen({ port: 0, host: '127.0.0.1' });
     const { port } = app.server.address() as AddressInfo;
     wsUrl = `ws://127.0.0.1:${port}/ws`;
@@ -88,15 +110,21 @@ describe('parties via WebSocket', () => {
     await app.close();
   });
 
-  it('GET /api/factions liste les factions jouables', async () => {
-    const response = await fetch(`${httpUrl}/api/factions`);
-    const factions = (await response.json()) as { id: string }[];
-    expect(factions.map(f => f.id)).toEqual(['havre', 'necropole', 'inferno']);
+  it('GET /api/decks liste les decks jouables', async () => {
+    const response = await fetch(`${httpUrl}/api/decks`);
+    const decks = (await response.json()) as { id: string }[];
+    expect(decks.map(d => d.id)).toEqual(['siegfried', 'namtaru', 'kalAzaar', 'kaiko', 'kat']);
+  });
+
+  it('referme la connexion d\'un joueur sans jeton valide', async () => {
+    expect(await closeCodeOf(wsUrl)).toBe(4401);
+    expect(await closeCodeOf(`${wsUrl}?token=faux`)).toBe(4401);
+    expect(await closeCodeOf(`${wsUrl}?token=${await tokenFor('acc', 'Alice', 'autre-secret')}`)).toBe(4401);
   });
 
   it('joue plusieurs tours contre l\'IA', async () => {
     const player = await connect();
-    player.send({ type: 'startAi', faction: 'havre' });
+    player.send({ type: 'startAi', deck: 'siegfried' });
     await player.waitForTurn();
 
     for (let i = 0; i < 5; i++) {
@@ -132,7 +160,7 @@ describe('parties via WebSocket', () => {
 
   it('renvoie une erreur pour une action illégale', async () => {
     const player = await connect();
-    player.send({ type: 'startAi', faction: 'inferno' });
+    player.send({ type: 'startAi', deck: 'kalAzaar' });
     await player.waitForTurn();
     player.send({ type: 'action', action: { type: 'develop', choice: 'm' } });
     player.send({ type: 'action', action: { type: 'develop', choice: 'g' } });
@@ -140,17 +168,18 @@ describe('parties via WebSocket', () => {
     expect(player.messages.find(m => m.type === 'error')).toEqual({ type: 'error', message: 'Votre héros a déjà agi ce tour-ci.' });
   });
 
-  it('apparie deux joueurs et fait gagner celui qui reste quand l\'autre se déconnecte', async () => {
-    const alice = await connect();
-    const bob = await connect();
-    alice.send({ type: 'findMatch', faction: 'havre' });
+  it('apparie deux joueurs, fait gagner celui qui reste quand l\'autre se déconnecte et envoie le résultat', async () => {
+    const alice = await connect('acc-alice', 'Alice');
+    const bob = await connect('acc-bob', 'Bob');
+    alice.send({ type: 'findMatch', deck: 'siegfried' });
     await alice.waitFor(c => c.messages.some(m => m.type === 'waiting'));
-    bob.send({ type: 'findMatch', faction: 'necropole' });
+    bob.send({ type: 'findMatch', deck: 'namtaru' });
     await alice.waitFor(c => c.state !== null);
     await bob.waitFor(c => c.state !== null);
 
     expect(alice.state!.you).toBe(0);
     expect(bob.state!.you).toBe(1);
+    expect(alice.state!.players.map(p => p.name)).toEqual(['Alice', 'Bob']);
 
     // Le premier joueur termine son tour : la main passe à l'autre
     const [first, second] = alice.state!.current === 0 ? [alice, bob] : [bob, alice];
@@ -162,5 +191,17 @@ describe('parties via WebSocket', () => {
     first.close();
     await second.waitFor(c => c.state!.phase === 'over');
     expect(second.state!.winner).toBe(second.state!.you);
+    const [winnerId, loserId] = second === alice ? ['acc-alice', 'acc-bob'] : ['acc-bob', 'acc-alice'];
+    await expect.poll(() => reports).toEqual([{ gameId: expect.any(String), mode: 'pvp', winnerId, loserId }]);
+  });
+
+  it('n\'apparie pas deux connexions d\'un même compte', async () => {
+    const tab1 = await connect('acc-alice', 'Alice');
+    const tab2 = await connect('acc-alice', 'Alice');
+    tab1.send({ type: 'findMatch', deck: 'siegfried' });
+    await tab1.waitFor(c => c.messages.some(m => m.type === 'waiting'));
+    tab2.send({ type: 'findMatch', deck: 'siegfried' });
+    await tab2.waitFor(c => c.messages.some(m => m.type === 'waiting'));
+    expect(tab1.state).toBeNull();
   });
 });

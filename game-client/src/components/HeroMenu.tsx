@@ -40,11 +40,14 @@ export function HeroMenu({ view, selection, onClick }: Props) {
         <button className="choice-mode hero-choice" onClick={develop('draw')} disabled={!!options.heroAction.drawReason} title={options.heroAction.drawReason ?? undefined}>
           🂠 Piocher (1💎)
         </button>
-        <button className="choice-mode hero-choice" onClick={() => onClick({ kind: 'power' })} disabled={!options.power.usable} title={options.power.reason ?? undefined}>
-          ✨ {power.name} ({power.cost}💎)
-        </button>
+        {power && (
+          <button className="choice-mode hero-choice" onClick={() => onClick({ kind: 'power' })} disabled={!options.power.usable} title={options.power.reason ?? undefined}>
+            ✨ {power.name} ({power.cost}💎)
+          </button>
+        )}
       </div>
-      <div className="hero-power-text">✨ <b>{power.name}</b> : {power.text}</div>
+      {power && <div className="hero-power-text">✨ <b>{power.name}</b> : {power.text}</div>}
+      {me.hero.passive && <div className="hero-power-text">♾️ <b>{me.hero.passive.name}</b> : {me.hero.passive.text}</div>}
       <button className="chooser-cancel" onClick={() => onClick({ kind: 'cancel' })}>Annuler</button>
     </aside>
   );

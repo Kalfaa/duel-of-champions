@@ -18,3 +18,10 @@ export class UnknownPlayerError extends Error {
     this.name = 'UnknownPlayerError';
   }
 }
+
+export class UnauthenticatedError extends Error {
+  constructor() {
+    super('Session invalide ou expirée : reconnectez-vous.');
+    this.name = 'UnauthenticatedError';
+  }
+}

@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 import type { GameView } from '../api/protocol';
 import type { Draw } from '../game/draws';
 import type { Click, Highlights, Selection } from '../game/selection';
-import type { Inspect } from './CardInspector';
+import { hoverHandlers, type Hover, type Inspect } from './CardInspector';
 import { CardFace, cls, onRightClick } from './common';
 import { animateDraw, lastCards } from './drawAnimation';
 
@@ -14,9 +14,10 @@ interface Props {
   drawn?: Draw | null;
   onClick(click: Click): void;
   onInspect(target: Inspect): void;
+  onHover?: Hover;
 }
 
-export function Hand({ view, selection, highlights, drawn = null, onClick, onInspect }: Props) {
+export function Hand({ view, selection, highlights, drawn = null, onClick, onInspect, onHover }: Props) {
   const me = view.players[view.you];
   const options = view.options;
   const handRef = useRef<HTMLDivElement>(null);
@@ -37,8 +38,12 @@ export function Hand({ view, selection, highlights, drawn = null, onClick, onIns
           <div
             key={`${i}-${c.id}`}
             className={cls('card', c.type, playable && 'playable', selected && 'sel', highlights.hand.has(i) && 'target')}
-            onClick={() => onClick({ kind: 'hand', index: i })}
+            onClick={() => {
+              onHover?.(null);
+              onClick({ kind: 'hand', index: i });
+            }}
             onContextMenu={onRightClick(() => onInspect({ kind: 'hand', index: i }))}
+            {...hoverHandlers(onHover, { kind: 'hand', index: i })}
           >
             <CardFace card={c} player={me} cost={options?.hand[i]?.cost} details />
           </div>

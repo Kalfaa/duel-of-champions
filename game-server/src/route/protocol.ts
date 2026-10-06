@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GameNotification } from '../service/ports';
 
-const factionSchema = z.enum(['havre', 'necropole', 'inferno']);
+const deckSchema = z.enum(['siegfried', 'namtaru', 'kalAzaar', 'ishuma', 'kaiko', 'takana', 'yukiko', 'kat', 'alia', 'adarMalik', 'dhamiria', 'noboru', 'zardoc']);
 const playerIndexSchema = z.union([z.literal(0), z.literal(1)]);
 const slotSchema = z.object({ row: z.number().int().min(0).max(1), lane: z.number().int().min(0).max(3) });
 const unitTargetSchema = z.object({ kind: z.literal('unit'), uid: z.number().int() });
@@ -9,9 +9,12 @@ const heroTargetSchema = z.object({ kind: z.literal('hero'), player: playerIndex
 const targetSchema = z.discriminatedUnion('kind', [unitTargetSchema, heroTargetSchema]);
 const choiceSchema = z.discriminatedUnion('kind', [
   slotSchema.extend({ kind: z.literal('slot') }), unitTargetSchema, heroTargetSchema,
+  slotSchema.extend({ kind: z.literal('cell'), player: playerIndexSchema }),
+  z.object({ kind: z.literal('lane'), lane: z.number().int().min(0).max(3) }),
+  z.object({ kind: z.literal('lasting'), index: z.number().int().min(0) }),
   z.object({ kind: z.literal('line'), player: playerIndexSchema, row: z.number().int().min(0).max(1) }),
   z.object({ kind: z.literal('hand'), index: z.number().int().min(0) }),
-  z.object({ kind: z.literal('card'), zone: z.enum(['library', 'grave']), cardId: z.string() }),
+  z.object({ kind: z.literal('card'), zone: z.enum(['library', 'grave', 'revealed']), cardId: z.string() }),
   z.object({ kind: z.literal('mode'), index: z.number().int().min(0) }),
 ]);
 const choicesSchema = z.array(choiceSchema).max(4);
@@ -23,12 +26,13 @@ export const gameActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event'), slot: z.number().int().min(0).max(1), choices: choicesSchema }),
   z.object({ type: z.literal('attack'), uid: z.number().int(), target: targetSchema }),
   z.object({ type: z.literal('move'), uid: z.number().int(), to: slotSchema }),
+  z.object({ type: z.literal('pick'), choice: choiceSchema }),
   z.object({ type: z.literal('endTurn') }),
 ]);
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('startAi'), faction: factionSchema }),
-  z.object({ type: z.literal('findMatch'), faction: factionSchema }),
+  z.object({ type: z.literal('startAi'), deck: deckSchema }),
+  z.object({ type: z.literal('findMatch'), deck: deckSchema }),
   z.object({ type: z.literal('action'), action: gameActionSchema }),
   z.object({ type: z.literal('leave') }),
 ]);
