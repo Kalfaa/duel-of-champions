@@ -44,7 +44,7 @@ export function place(game: Game, pi: PlayerIndex, cardId: string, row: number, 
   const card = getCreature(cardId);
   const unit: Unit = {
     uid: nextUid++, cardId, owner: pi, attackType: card.attackType, magic: card.magic, keywords: { ...card.keywords }, deployedTurn: -1,
-    atk: card.atk, ret: card.ret, hpCur: card.hp, hpMax: card.hp, stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0, tempKeywords: {}, doomed: null, untargetableUntil: null, moved: false, enchantments: [], acted: false, attacked: false,
+    atk: card.atk, ret: card.ret, hpCur: card.hp, hpMax: card.hp, stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0, tempKeywords: {}, doomed: null, untargetableUntil: null, moved: false, enchantments: [], acted: false, attacked: false, attacks: 0,
   };
   state(game, pi).board[row]![lane] = unit;
   return unit;

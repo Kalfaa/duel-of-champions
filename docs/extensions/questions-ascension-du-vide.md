@@ -144,7 +144,7 @@ Restent à décider :
 
 Interprétations à valider :
 
-- **Double attaque.** ✅ Règle confirmée : « si la créature est encore en vie après sa première attaque, elle attaque une seconde fois ; les deux attaques subissent la riposte ». Reste à valider : la seconde attaque vise la même cible si elle est encore à portée, sinon la première cible à portée ; la créature perd sa rage après sa dernière attaque, pas entre les deux.
+- **Double attaque.** ✅ Règle confirmée : la créature a deux phases d'attaque par tour ; le joueur lance chacune et en choisit la cible, et chaque attaque subit la riposte. Reste à valider : après sa première attaque, elle ne peut plus se déplacer ; elle perd sa rage après chaque attaque.
 - **Rage.** ✅ Confirmé : les marqueurs sont reçus à la mort d'une **autre** créature alliée, pas de la créature elle-même.
 - **Cumul des réductions de moitié.** Résistance à la magie, Intangible et Mousson s'appliquent l'une après l'autre (×½ chacune).
 

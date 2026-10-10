@@ -31,13 +31,13 @@ export const ALLOWED_ROWS: Record<AttackType, readonly number[]> = { melee: [0],
 
 /** Capacités des créatures (Duel of Champions). */
 export interface Keywords {
-  /** Immunisé contre la riposte. */
+  /** Immunisé à la riposte. */
   noret?: boolean;
-  /** Empilable : une créature du même nom peut être déployée dessus. */
+  /** Cumulable : une créature du même nom peut être déployée dessus. */
   stackable?: boolean;
   /** Garde mêlée : retire N aux dégâts de combat des créatures de mêlée, pour elle et ses voisines. */
   meleeGuard?: number;
-  /** Garde distance : retire N aux dégâts de combat des tireurs, pour elle et ses voisines. */
+  /** Garde à distance : retire N aux dégâts de combat des tireurs, pour elle et ses voisines. */
   rangedGuard?: number;
   /** Soin : au ravitaillement, soigne N aux créatures alliées adjacentes. */
   heal?: number;
@@ -49,11 +49,11 @@ export interface Keywords {
   lifeDrain?: number;
   /** Infection : ses dégâts d'attaque posent N marqueurs de poison. */
   infect?: number;
-  /** Intangible : les dégâts non magiques sont divisés par deux (arrondi inférieur). */
+  /** Incorporel : les dégâts non magiques sont divisés par deux (arrondi inférieur). */
   incorporeal?: boolean;
   /** Charge : attaque aussi l'autre créature du couloir de la cible. */
   charge?: boolean;
-  /** Attaque en balayage : attaque aussi les créatures voisines de la cible sur sa ligne. */
+  /** Balayage : attaque aussi les créatures voisines de la cible sur sa ligne. */
   sweep?: boolean;
   /** Explosion : inflige N dégâts aux créatures adjacentes à la cible. */
   areaBlast?: number;
@@ -63,13 +63,13 @@ export interface Keywords {
   taunt?: boolean;
   /** Chaque carte jouée par l'adversaire lui fait défausser une carte. */
   imposeDiscard?: boolean;
-  /** Rétribution : riposte même si elle meurt de l'attaque. */
+  /** Châtiment : riposte même si elle meurt de l'attaque. */
   retribution?: boolean;
   /** Frappe préventive : riposte avant que l'attaquant n'inflige ses dégâts. */
   preemptive?: boolean;
   /** Explosion de feu : à sa mort, inflige N dégâts de feu aux créatures de son couloir, des deux côtés. */
   fireBurst?: number;
-  /** Soin par le feu : les dégâts de feu qu'elle subit la soignent à la place. */
+  /** Soin de feu : les dégâts de feu qu'elle subit la soignent à la place. */
   fireHeal?: boolean;
   /** Estropiement : ses dégâts d'attaque posent N marqueurs d'estropiement (-1 attaque et -1 riposte chacun). */
   crippling?: number;
@@ -95,9 +95,9 @@ export interface Keywords {
   recycle?: boolean;
   /** Honneur : les créatures alliées adjacentes gagnent +N en attaque et en riposte. */
   honor?: number;
-  /** Hypnose : les créatures ennemies de son couloir sont immobilisées. */
+  /** Hypnotiser : les créatures ennemies de son couloir sont immobilisées. */
   hypnotize?: boolean;
-  /** Toucher glacé : la créature à qui elle inflige des dégâts d'attaque ne peut ni attaquer ni bouger jusqu'au prochain tour de son propriétaire. */
+  /** Toucher gelé : la créature à qui elle inflige des dégâts d'attaque ne peut ni attaquer ni bouger jusqu'au prochain tour de son propriétaire. */
   frozenTouch?: boolean;
   /** Bouclier magique : ne subit aucun dégât des sorts ni des créatures magiques. */
   magicShield?: boolean;
@@ -109,7 +109,7 @@ export interface Keywords {
   blockLane?: boolean;
   /** Déjouer : en arrivant en jeu, déplace une créature ennemie ciblée. */
   outmanoeuvre?: boolean;
-  /** Les autres créatures alliées de l'école de l'Eau gagnent Explosion N. */
+  /** Les autres créatures alliées de l'école de l'Eau gagnent Déflagration N. */
   waterBlast?: number;
   /** La première fois par tour qu'elle blesse le héros ennemi au combat, la production de son propriétaire augmente de 1. */
   blackmail?: boolean;
@@ -133,31 +133,31 @@ export interface Keywords {
   mightStats?: boolean;
   /** Coûte 1 ressource de moins par créature mise au cimetière ce tour-ci. */
   bloodDiscount?: boolean;
-  /** À la fin du tour de son propriétaire, ses créatures avec Rage reçoivent N marqueurs de rage. */
+  /** À la fin du tour de son propriétaire, ses créatures avec Rage furibonde reçoivent N marqueurs de rage. */
   warchant?: number;
   /** En arrivant, détruit deux autres créatures alliées ciblées ; son attaque et sa riposte valent leurs PV restants cumulés. */
   bloodPact?: boolean;
   /** Peur N : ne peut pas être attaquée par une créature qui exige N ou moins en Puissance. */
   fear?: number;
-  /** Imposante : les autres créatures alliées de son couloir ne peuvent être ni attaquées ni blessées au combat. */
+  /** Imposant : les autres créatures alliées de son couloir ne peuvent être ni attaquées ni blessées au combat. */
   towering?: boolean;
-  /** Ne peut pas attaquer. */
+  /** Attaque impossible. */
   noAttack?: boolean;
-  /** Rapide : peut attaquer et se déplacer le même tour. */
+  /** Vivacité : peut attaquer et se déplacer le même tour. */
   swift?: boolean;
   /** Protection contre les fortunes : ni ciblée, ni affectée par les fortunes. */
   fortuneWard?: boolean;
-  /** Protection contre les sorts ennemis : ni ciblée, ni affectée par les sorts adverses. */
+  /** Protection contre les sorts adverses : ni ciblée, ni affectée par les sorts adverses. */
   enemySpellWard?: boolean;
   /** Ne peut pas être ciblée. */
   untargetable?: boolean;
-  /** Canal magique N : la Magie de son propriétaire augmente de N tant qu'elle est en jeu. */
+  /** Canalisation de la magie N : la Magie de son propriétaire augmente de N tant qu'elle est en jeu. */
   magicChannel?: number;
   /** Aucun marqueur ne peut être posé sur elle. */
   noCounters?: boolean;
-  /** Soin par la terre : les dégâts de terre qu'elle subit la soignent à la place. */
+  /** Soin terrestre : les dégâts de terre qu'elle subit la soignent à la place. */
   earthHeal?: boolean;
-  /** Garde volants : retire N aux dégâts de combat des volants contre elle et ses voisines. */
+  /** Garde volant : retire N aux dégâts de combat des volants contre elle et ses voisines. */
   flyerGuard?: number;
   /** Résistance aux sorts : les dégâts des sorts sont divisés par deux. */
   spellResist?: boolean;
@@ -169,7 +169,7 @@ export interface Keywords {
   perfectRetaliation?: boolean;
   /** Soif de sang N : quand une créature ennemie meurt, reçoit N marqueurs de rage. */
   bloodthirst?: number;
-  /** Ancrée : ne peut être ni déplacée ni échangée. */
+  /** Ancré : ne peut être ni déplacée ni échangée. */
   anchored?: boolean;
   /** Après avoir été attaquée, détruit la créature qui l'a attaquée. */
   destroysAttacker?: boolean;

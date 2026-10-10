@@ -51,25 +51,37 @@ describe('Bastion — mécaniques', () => {
     expect(resistant.hpCur).toBe(1);
   });
 
-  it('Double attaque : la créature attaque une seconde fois après la riposte, puis une autre cible si la première est morte', () => {
+  it('Double attaque : la créature peut lancer une seconde attaque, sur la cible de son choix', () => {
     const { game, a, b } = newGame();
     const ghoul = place(game, a, 'gouleMiserable', 0, 0); // 2/1/2
     ghoul.keywords = { doubleAttack: true };
     const griffin = place(game, b, 'griffonLoyal', 0, 0); // 2/1/4
     game.attack(a, ghoul.uid, unit(griffin));
-    expect(griffin.hpCur).toBe(2);
     game.resolveRetaliation();
-    expect(game.locate(griffin.uid)).toBeNull();
+    expect(griffin.hpCur).toBe(2);
     expect(ghoul.hpCur).toBe(1);
-    expect(game.hasPendingRetaliation).toBe(false);
+    expect(game.whyNotAttack(a, ghoul.uid)).toBeNull();
+    game.attack(a, ghoul.uid, unit(griffin));
+    expect(game.locate(griffin.uid)).toBeNull();
+    expect(game.whyNotAttack(a, ghoul.uid)).toBe('Cette créature a déjà agi ce tour-ci.');
   });
 
-  it('Double attaque : frappe deux fois le héros', () => {
+  it('Double attaque : chaque attaque est une action séparée', () => {
     const { game, a, b } = newGame();
     const ghoul = place(game, a, 'gouleMiserable', 0, 0);
     ghoul.keywords = { doubleAttack: true };
     game.attack(a, ghoul.uid, { kind: 'hero', player: b });
+    expect(game.player(b).hp).toBe(game.player(b).maxHp - 2);
+    expect(game.moveDestinations(a, ghoul.uid)).toEqual([]);
+    game.attack(a, ghoul.uid, { kind: 'hero', player: b });
     expect(game.player(b).hp).toBe(game.player(b).maxHp - 4);
+  });
+
+  it('sans Double attaque, la créature n\'attaque qu\'une fois', () => {
+    const { game, a, b } = newGame();
+    const ghoul = place(game, a, 'gouleMiserable', 0, 0);
+    game.attack(a, ghoul.uid, { kind: 'hero', player: b });
+    expect(game.whyNotAttack(a, ghoul.uid)).toBe('Cette créature a déjà agi ce tour-ci.');
   });
 
   it('Attaque rapide : la créature agit le tour de son déploiement, sauf sous Étreinte de la terre', () => {

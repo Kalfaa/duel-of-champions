@@ -47,7 +47,7 @@ export interface UnitView {
   hpCur: number;
   hpMax: number;
   keywords: Keywords;
-  /** Taille de la pile (Empilable). */
+  /** Taille de la pile (Cumulable). */
   stack: number;
   poison: number;
   /** Marqueurs d'estropiement. */
@@ -60,9 +60,9 @@ export interface UnitView {
   enchantments: string[];
   /** La créature a déjà agi ce tour-ci, ou vient d'être déployée. */
   exhausted: boolean;
-  /** Elle ne peut pas attaquer ce tour-ci (Toucher glacé, cartes permanentes…). */
+  /** Elle ne peut pas attaquer ce tour-ci (Toucher gelé, cartes permanentes…). */
   cannotAttack: boolean;
-  /** Elle ne peut pas bouger (Hypnose, Toucher glacé). */
+  /** Elle ne peut pas bouger (Hypnotiser, Toucher gelé). */
   immobilized: boolean;
 }
 
@@ -234,7 +234,7 @@ function toUnitView(game: Game, unit: Unit): UnitView {
     uid: unit.uid, card: toCardView(getCard(unit.cardId)),
     atk: game.attackOf(unit), ret: game.retaliationOf(unit), hpCur: unit.hpCur, hpMax: unit.hpMax,
     keywords: game.keywordsOf(unit), stack: unit.stack, poison: unit.poison, cripple: unit.cripple, boost: unit.boost, enrage: unit.enrage,
-    enchantments: unit.enchantments.map(e => getCard(e.cardId).name), exhausted: unit.acted || unit.deployedTurn === game.turn,
+    enchantments: unit.enchantments.map(e => getCard(e.cardId).name), exhausted: (unit.acted && !game.canAttackAgain(unit)) || unit.deployedTurn === game.turn,
     cannotAttack: game.cannotAttack(unit), immobilized: game.isImmobilized(unit),
   };
 }

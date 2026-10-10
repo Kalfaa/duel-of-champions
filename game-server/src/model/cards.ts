@@ -107,7 +107,7 @@ export interface LastingRules {
   poisonsAttackers?: number;
   /** Les créatures alliées gardent leurs marqueurs de rage quand elles attaquent. */
   keepsEnrage?: boolean;
-  /** Détruite quand une créature alliée avec Rage meurt. */
+  /** Détruite quand une créature alliée avec Rage furibonde meurt. */
   fragileToEnragedDeath?: boolean;
   /** Capacités retirées à toutes les créatures. */
   suppresses?: readonly (keyof Keywords)[];
@@ -146,7 +146,7 @@ export interface ActionCard extends CardBase {
 export type Card = CreatureCard | ActionCard;
 
 /**
- * Source de dégâts : seuls les dégâts non magiques sont réduits par Intangible ; l'école compte pour le feu et les ténèbres,
+ * Source de dégâts : seuls les dégâts non magiques sont réduits par Incorporel ; l'école compte pour le feu et les ténèbres,
  * et les dégâts des sorts sont marqués comme tels. Des dégâts imparables (Riposte parfaite) ne sont réduits par rien.
  */
 export interface DamageSource {
@@ -521,7 +521,7 @@ const CARD_LIST: Card[] = [
     }),
     fortune({
       id: 'appelCorneSanglante', name: 'Appel de la Corne sanglante', rarity: 'common', cost: 2, req: { d: 2 }, icon: '📯', art: 'Call_of_the_Bloodhorn',
-      text: 'Permanent : vos créatures gardent leurs marqueurs de rage quand elles attaquent. Détruit quand une de vos créatures avec Rage meurt.',
+      text: 'Permanent : vos créatures gardent leurs marqueurs de rage quand elles attaquent. Détruit quand une de vos créatures avec Rage furibonde meurt.',
       effect: effect([], () => {}),
       lasting: { duration: 'permanent', keepsEnrage: true, fragileToEnragedDeath: true },
     }),
@@ -725,7 +725,7 @@ const CARD_LIST: Card[] = [
   ...section('havre', 'voidRising', [
     fortune({
       id: 'phalangeImperiale', name: 'Phalange impériale', rarity: 'uncommon', cost: 2, req: { d: 2 }, icon: '🛡️', art: 'Imperial_phalanx',
-      text: 'Permanent : si aucune de vos créatures de mêlée n\'a attaqué pendant votre tour, vos créatures gagnent Rétribution et +1 en riposte jusqu\'à votre prochain tour.',
+      text: 'Permanent : si aucune de vos créatures de mêlée n\'a attaqué pendant votre tour, vos créatures gagnent Châtiment et +1 en riposte jusqu\'à votre prochain tour.',
       effect: effect([], () => {}),
       lasting: {
         duration: 'permanent', phalanx: true,
@@ -984,7 +984,7 @@ const CARD_LIST: Card[] = [
     }),
     fortune({
       id: 'campOrc', name: 'Camp orc', rarity: 'uncommon', cost: 2, req: { d: 2 }, icon: '⛺', art: 'Orc_camp',
-      text: 'Posez sur chacune de vos créatures autant de marqueurs de rage que sa valeur de Rage.',
+      text: 'Posez sur chacune de vos créatures autant de marqueurs de rage que sa valeur de Rage furibonde.',
       effect: effect([], (g, pi) => g.units(pi).forEach(x => {
         const enrage = g.keywordsOf(x.unit).enrage;
         if (enrage) g.addCounters(x.unit, 'enrage', enrage);

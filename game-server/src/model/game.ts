@@ -62,7 +62,7 @@ export interface Unit {
   ret: number;
   hpCur: number;
   hpMax: number;
-  /** Nombre de créatures empilées (capacité Empilable). */
+  /** Nombre de créatures empilées (capacité Cumulable). */
   stack: number;
   /** Marqueurs de poison : 1 dégât chacun au ravitaillement de son propriétaire. */
   poison: number;
@@ -72,9 +72,9 @@ export interface Unit {
   boost: number;
   /** Marqueurs de rage : +1 en attaque et en riposte chacun. */
   enrage: number;
-  /** Ne peut pas attaquer jusqu'au prochain tour de ce joueur (Toucher glacé, Labyrinthe gelé). */
+  /** Ne peut pas attaquer jusqu'au prochain tour de ce joueur (Toucher gelé, Labyrinthe gelé). */
   cannotAttackUntil: PlayerIndex | null;
-  /** Immobilisée jusqu'au prochain tour de ce joueur (Toucher glacé). */
+  /** Immobilisée jusqu'au prochain tour de ce joueur (Toucher gelé). */
   immobileUntil: PlayerIndex | null;
   /** Bonus d'attaque jusqu'à la fin du tour. */
   tempAttack: number;
@@ -84,13 +84,15 @@ export interface Unit {
   doomed: 'destroy' | 'banish' | null;
   /** Ne peut pas être ciblée jusqu'au prochain tour de ce joueur (Jour du Sanctuaire). */
   untargetableUntil: PlayerIndex | null;
-  /** La créature s'est déplacée ce tour-ci (une créature Rapide peut encore attaquer). */
+  /** La créature s'est déplacée ce tour-ci (une créature avec Vivacité peut encore attaquer). */
   moved: boolean;
   enchantments: Enchantment[];
   /** La créature a déjà attaqué ou s'est déjà déplacée ce tour-ci. */
   acted: boolean;
   /** La créature a attaqué ce tour-ci (Rétablissement). */
   attacked: boolean;
+  /** Nombre d'attaques de la créature ce tour-ci (deux possibles avec Double attaque). */
+  attacks: number;
 }
 
 export interface DeployBonus {
@@ -174,15 +176,11 @@ export type PendingPlay = {
 
 /** Riposte due par le défenseur, résolue juste après l'attaque. */
 interface PendingRetaliation {
-  /** Le défenseur, qui peut être mort entre-temps s'il a Rétribution. */
+  /** Le défenseur, qui peut être mort entre-temps s'il a Châtiment. */
   defender: Unit;
   /** Sa riposte au moment de l'attaque, utilisée s'il est mort. */
   amount: number;
   attacker: number;
-  /** Cible de l'attaque, pour la seconde attaque d'une Double attaque. */
-  target: Target;
-  /** C'était la première attaque de la créature ce tour-ci. */
-  first: boolean;
   /** Ce que subit l'attaquant après l'attaque (Guerrier shinje, Maniaque des flammes). */
   reprisal: Reprisal;
   /** L'attaquant a infligé des dégâts d'attaque : son Drain de vie s'applique après la riposte. */
@@ -545,14 +543,14 @@ export class Game {
     return k;
   }
 
-  /** La créature ne peut pas bouger : immobilisée (Toucher glacé) ou hypnotisée par une créature ennemie de son couloir. */
+  /** La créature ne peut pas bouger : immobilisée (Toucher gelé) ou hypnotisée par une créature ennemie de son couloir. */
   isImmobilized(unit: Unit): boolean {
     if (unit.immobileUntil !== null) return true;
     const found = this.locate(unit.uid);
     return !!found && this.units(other(found.owner)).some(x => x.lane === found.lane && this.keywordsOf(x.unit).hypnotize);
   }
 
-  /** La créature ne peut pas attaquer ce tour-ci (Toucher glacé, cartes permanentes, Salle des défis). */
+  /** La créature ne peut pas attaquer ce tour-ci (Toucher gelé, cartes permanentes, Salle des défis). */
   cannotAttack(unit: Unit): boolean {
     if (unit.cannotAttackUntil !== null || this.keywordsOf(unit).noAttack) return true;
     const found = this.locate(unit.uid);
@@ -730,10 +728,19 @@ export class Game {
     return null;
   }
 
-  /** La créature a déjà attaqué (ou s'est déjà déplacée) ce tour-ci ; une créature Rapide peut faire les deux. */
+  /**
+   * La créature a déjà attaqué (ou s'est déjà déplacée) ce tour-ci ; une créature avec Vivacité peut faire les deux.
+   * Une créature à Double attaque qui a attaqué une fois peut encore attaquer, mais plus se déplacer.
+   */
   private hasUsed(unit: Unit, action: 'attack' | 'move'): boolean {
+    if (action === 'attack' && this.canAttackAgain(unit)) return false;
     if (!this.keywordsOf(unit).swift) return unit.acted;
     return action === 'attack' ? unit.attacked : unit.moved;
+  }
+
+  /** La créature a déjà attaqué ce tour-ci, mais Double attaque lui permet une seconde attaque. */
+  canAttackAgain(unit: Unit): boolean {
+    return unit.attacked && unit.attacks < (this.keywordsOf(unit).doubleAttack ? 2 : 1);
   }
 
   /** La créature est protégée contre cette carte : sort de Ténèbres, fortune, ou sort d'un adversaire. */
@@ -945,8 +952,8 @@ export class Game {
   }
 
   /**
-   * La créature attaque une cible. Charge, Attaque en balayage et Explosion touchent d'autres créatures.
-   * Si le défenseur a de la riposte et survit (ou a Rétribution), celle-ci est mise en attente et appliquée par
+   * La créature attaque une cible. Charge, Balayage et Déflagration touchent d'autres créatures.
+   * Si le défenseur a de la riposte et survit (ou a Châtiment), celle-ci est mise en attente et appliquée par
    * resolveRetaliation() ; aucune autre action n'est possible entre-temps. Avec Frappe préventive, il riposte d'abord.
    */
   attack(pi: PlayerIndex, uid: number, target: Target): void {
@@ -955,14 +962,12 @@ export class Game {
     const unit = this.locate(uid)!.unit;
     unit.acted = true;
     unit.attacked = true;
-    this.performAttack(pi, unit, target, true);
+    unit.attacks += 1;
+    this.performAttack(pi, unit, target);
   }
 
-  /**
-   * Une attaque de la créature : la première, ou la seconde d'une Double attaque. Si une riposte est due, elle est
-   * mise en attente ; la suite de l'attaque (seconde attaque, perte de la rage) se fait alors après elle.
-   */
-  private performAttack(pi: PlayerIndex, unit: Unit, target: Target, first: boolean): void {
+  /** Une attaque de la créature. Si une riposte est due, elle est mise en attente ; la suite de l'attaque (perte de la rage) se fait alors après elle. */
+  private performAttack(pi: PlayerIndex, unit: Unit, target: Target): void {
     const uid = unit.uid;
     const name = getCard(unit.cardId).name;
     this.pendingEvents.push({ kind: 'attack', attacker: uid, target });
@@ -1003,13 +1008,13 @@ export class Game {
       blasted.forEach(u => this.damageUnit(u.uid, blast, this.unitSource(unit)));
       const survived = this.locate(target.uid) !== null;
       if (retaliation > 0 && !dk.preemptive && (survived || dk.retribution) && this.locate(uid)) {
-        this.pendingRetaliation = { defender, amount: retaliation, attacker: uid, target, first, reprisal, drained };
+        this.pendingRetaliation = { defender, amount: retaliation, attacker: uid, reprisal, drained };
         return;
       }
     }
     this.applyLifeDrain(uid, drained);
     this.applyReprisal(unit, reprisal);
-    this.afterAttack(unit, target, first);
+    this.afterAttack(unit);
   }
 
   /** Ce que subit l'attaquant après avoir attaqué : destruction (Guerrier shinje) ou dégâts (Maniaque des flammes). */
@@ -1019,21 +1024,10 @@ export class Game {
     if (reprisal.destroy) this.destroyUnit(attacker.uid);
   }
 
-  /**
-   * Fin d'une attaque : une créature à Double attaque encore en vie attaque une seconde fois (la même cible si elle
-   * est encore à portée, sinon la première à portée) ; après sa dernière attaque, la créature perd sa rage.
-   */
-  private afterAttack(unit: Unit, target: Target, first: boolean): void {
+  /** Fin d'une attaque : la créature perd sa rage. */
+  private afterAttack(unit: Unit): void {
     const found = this.locate(unit.uid);
     if (!found || this.isOver) return;
-    if (first && this.keywordsOf(unit).doubleAttack) {
-      const reachable = this.reachableTargets(found);
-      const next = reachable.find(t => sameChoice(t, target)) ?? reachable[0];
-      if (next) {
-        this.performAttack(found.owner, unit, next, false);
-        return;
-      }
-    }
     const keepsEnrage = this.lastingCards.some(e => e.owner === unit.owner && rulesOf(e).keepsEnrage);
     if (!keepsEnrage) unit.enrage = 0;
     const gate = this.lastingCards.find(e => rulesOf(e).banishesAttackers && e.lane === found.lane && e.owner !== found.owner);
@@ -1044,7 +1038,7 @@ export class Game {
     if (this.keywordsOf(unit).spellsmasher) this.offerSmash(found.owner);
   }
 
-  /** Le défenseur riposte : il inflige sa valeur de riposte à son attaquant, même mort s'il a Rétribution. */
+  /** Le défenseur riposte : il inflige sa valeur de riposte à son attaquant, même mort s'il a Châtiment. */
   resolveRetaliation(): void {
     const pending = this.pendingRetaliation;
     if (!pending) throw new GameRuleError('Aucune riposte à résoudre.');
@@ -1058,7 +1052,7 @@ export class Game {
     this.applyLifeDrain(pending.attacker, pending.drained);
     const attacker = this.locate(pending.attacker)?.unit;
     if (attacker) this.applyReprisal(attacker, pending.reprisal);
-    if (attacker && this.locate(attacker.uid)) this.afterAttack(attacker, pending.target, pending.first);
+    if (attacker && this.locate(attacker.uid)) this.afterAttack(attacker);
   }
 
   /** La créature se déplace vers une case adjacente autorisée ; cela remplace son attaque du tour. */
@@ -1313,7 +1307,7 @@ export class Game {
 
   /**
    * Inflige des dégâts à une créature ; retourne les dégâts réellement encaissés.
-   * Intangible divise par deux les dégâts non magiques ; voir aussi inflict().
+   * Incorporel divise par deux les dégâts non magiques ; voir aussi inflict().
    */
   damageUnit(uid: number, n: number, source: DamageSource): number {
     return this.inflict(uid, n, source).dealt;
@@ -1868,6 +1862,7 @@ export class Game {
     for (const { unit } of this.units(pi)) {
       unit.acted = false;
       unit.attacked = false;
+      unit.attacks = 0;
       unit.moved = false;
       if (unit.poison > 0) {
         this.addLog(`${getCard(unit.cardId).name} subit le poison (${unit.poison}).`, 'damage', pi);
@@ -2026,7 +2021,7 @@ export class Game {
     return unit;
   }
 
-  /** Créatures touchées en plus de la cible : Charge (même couloir) et Attaque en balayage (voisines de ligne). */
+  /** Créatures touchées en plus de la cible : Charge (même couloir) et Balayage (voisines de ligne). */
   private extraStrikes(attacker: Unit, targetUid: number): number[] {
     const found = this.locate(targetUid);
     if (!found) return [];
@@ -2062,8 +2057,8 @@ export class Game {
   }
 
   /**
-   * Inflige des dégâts à une créature. Intangible divise par deux les dégâts non magiques,
-   * Protection contre les ténèbres ignore ceux des Ténèbres, Soin par le feu change ceux du feu en soin.
+   * Inflige des dégâts à une créature. Incorporel divise par deux les dégâts non magiques,
+   * Protection contre les ténèbres ignore ceux des Ténèbres, Soin de feu change ceux du feu en soin.
    */
   private inflict(uid: number, n: number, source: DamageSource): DamageResult {
     const unit = this.locate(uid)?.unit;
@@ -2133,7 +2128,7 @@ export class Game {
     return enchantments + this.lastingCards.filter(e => getCard(e.cardId).type === 'spell').length;
   }
 
-  /** Effets des dégâts d'attaque sur une créature : Infection, Estropiement, Toucher glacé. */
+  /** Effets des dégâts d'attaque sur une créature : Infection, Estropiement, Toucher gelé. */
   private onAttackDamage(pi: PlayerIndex, k: Keywords, hit: Unit): void {
     if (k.infect) this.addCounters(hit, 'poison', k.infect);
     if (k.crippling) this.addCounters(hit, 'cripple', k.crippling);
@@ -2373,7 +2368,7 @@ export class Game {
       keywords: { ...card.keywords }, deployedTurn: this.turnCount,
       atk: card.atk, ret: card.ret, hpCur: card.hp, hpMax: card.hp,
       stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0,
-      tempKeywords: {}, doomed: null, untargetableUntil: null, enchantments: [], acted: false, attacked: false, moved: false,
+      tempKeywords: {}, doomed: null, untargetableUntil: null, enchantments: [], acted: false, attacked: false, attacks: 0, moved: false,
     };
   }
 

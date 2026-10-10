@@ -64,7 +64,7 @@ export function assertPlayableDeck(id: DeckId): void {
   if (!PLAYABLE_DECKS.includes(id)) throw new GameRuleError('Ce deck n\'est pas disponible.');
 }
 
-/** Une créature ennemie immobilisée (Hypnose, Toucher glacé). */
+/** Une créature ennemie immobilisée (Hypnotiser, Toucher gelé). */
 const immobilizedEnemyStep: Step = {
   prompt: 'Choisissez la créature ennemie immobilisée à frapper.',
   emptyReason: 'Aucune créature ennemie immobilisée.',
@@ -239,7 +239,7 @@ export const DECKS: Readonly<Record<DeckId, Deck>> = {
     hero: {
       ...HERALD_HERO, name: 'Zardoc, appel de la bravoure', icon: '🪓', art: 'Zardoc_Caller_of_Valor', schools: ['Lumière', 'Terre'],
       power: {
-        name: 'Charge héroïque', cost: 6, text: 'Une créature ciblée gagne Rapide et Charge jusqu\'à la fin du tour.',
+        name: 'Charge héroïque', cost: 6, text: 'Une créature ciblée gagne Vivacité et Charge jusqu\'à la fin du tour.',
         effect: effect([creatureStep('Choisissez la créature à lancer à la charge.', 'any')],
           (g, _pi, { choices }) => g.grantUntilEndOfTurn(unitChoice(choices[0]), { swift: true, charge: true })),
       },
