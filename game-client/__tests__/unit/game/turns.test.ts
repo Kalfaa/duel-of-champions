@@ -17,6 +17,11 @@ describe('turnTaker', () => {
     expect(turnTaker(view({ gameId: 'autre', current: 1 }), view({ current: 1 }))).toBe(1);
   });
 
+  it('attend la fin du mulligan pour annoncer le premier joueur', () => {
+    expect(turnTaker(null, view({ current: 1, phase: 'mulligan' }))).toBeNull();
+    expect(turnTaker(view({ current: 1, phase: 'mulligan' }), view({ current: 1 }))).toBe(1);
+  });
+
   it('ne dit rien quand la partie se termine', () => {
     expect(turnTaker(view({ current: 0 }), view({ current: 1, phase: 'over' }))).toBeNull();
   });

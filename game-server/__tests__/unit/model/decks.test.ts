@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getCard } from '../../../src/model/cards';
-import { DECKS } from '../../../src/model/decks';
+import { deckFaction, DECKS } from '../../../src/model/decks';
+import { getHero } from '../../../src/model/heroes';
 import { getEvent } from '../../../src/model/events';
 import { DECK_IDS } from '../../../src/model/types';
 
@@ -22,7 +23,7 @@ describe('DECKS', () => {
   });
 
   it.each(DECK_IDS)('le deck %s ne contient que des cartes de sa faction ou neutres', id => {
-    for (const card of cardsOf(id)) expect([DECKS[id].faction, null]).toContain(card.faction);
+    for (const card of cardsOf(id)) expect([deckFaction(id), null]).toContain(card.faction);
   });
 
   it('les sorts n\'ont pas de faction mais une école de magie', () => {
@@ -37,8 +38,8 @@ describe('DECKS', () => {
   });
 
   it('les héros d\'Ascension du vide ont leurs PV et caractéristiques officiels', () => {
-    expect(DECKS.kaiko.hero).toMatchObject({ hp: 18, m: 0, g: 2, d: 1 });
-    expect(DECKS.yukiko.hero).toMatchObject({ hp: 20, m: 1, g: 1, d: 2, power: null });
-    expect(DECKS.takana.hero.passive?.honorAttack).toBe(1);
+    expect(getHero('kaiko')).toMatchObject({ hp: 18, m: 0, g: 2, d: 1 });
+    expect(getHero('yukiko')).toMatchObject({ hp: 20, m: 1, g: 1, d: 2, power: null });
+    expect(getHero('takana').passive?.honorAttack).toBe(1);
   });
 });

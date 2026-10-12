@@ -27,6 +27,7 @@ export function HeroColumn({ view, player, side, highlights, flashes, onClick, o
 
   return (
     <div className={cls('herocol', side)}>
+      <LastingRow view={view} player={player} highlights={highlights} onClick={onClick} onInspect={onInspect} onHover={onHover} />
       <div
         className={cls('herocard', side, view.current === player && 'active', ready && 'ready', highlights.heroes.has(player) && 'target')}
         style={artStyle(hero.art)}
@@ -38,7 +39,6 @@ export function HeroColumn({ view, player, side, highlights, flashes, onClick, o
         <div className="herohp" style={hpFillStyle(p.hp, p.maxHp)} title={`Points de vie : ${p.hp}/${p.maxHp}`}>{p.hp}</div>
         <FlashMark flash={flashes.get(`hero-${player}`)} />
       </div>
-      <LastingRow view={view} player={player} highlights={highlights} onClick={onClick} onInspect={onInspect} onHover={onHover} />
       <div className="piles">
         <div className="pile deck" data-mine={mine || undefined} style={{ backgroundImage: `url('/img/back/${p.faction}.webp')` }} title="Bibliothèque"><span className="cnt">{p.deckCount}</span><small>Deck</small></div>
         <div className="pile grave" style={artStyle(p.grave.at(-1)?.art)} title="Consulter le cimetière" onClick={() => onOpenGrave(player)}>

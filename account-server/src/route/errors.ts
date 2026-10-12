@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AccountRuleError, UsernameTakenError } from '../model/errors';
-import { AccountNotFoundError, ConflictingMatchError, InvalidCredentialsError, UnauthenticatedError } from '../service/errors';
+import {
+  AccountNotFoundError, ConflictingMatchError, DeckNotFoundError, InvalidCredentialsError, UnauthenticatedError,
+} from '../service/errors';
 
 /** Entrée refusée par un schéma de validation. */
 export class InvalidRequestError extends Error {
@@ -24,7 +26,7 @@ function statusOf(error: unknown): number | null {
   if (error instanceof UsernameTakenError || error instanceof ConflictingMatchError) return 409;
   if (error instanceof AccountRuleError) return 400;
   if (error instanceof InvalidCredentialsError || error instanceof UnauthenticatedError) return 401;
-  if (error instanceof AccountNotFoundError) return 404;
+  if (error instanceof AccountNotFoundError || error instanceof DeckNotFoundError) return 404;
   return null;
 }
 

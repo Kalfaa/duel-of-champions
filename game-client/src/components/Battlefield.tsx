@@ -8,6 +8,7 @@ import { hoverHandlers, type Hover, type Inspect } from './CardInspector';
 import { ArtFallback, artStyle, ATTACK, cls, FlashMark, keywordIcons, onRightClick, StatBadges } from './common';
 import { EventRow } from './EventRow';
 import { HeroColumn } from './HeroColumn';
+import { LaneEnchantments } from './LastingRow';
 
 const ROWS = [0, 1] as const;
 const LANES = [0, 1, 2, 3] as const;
@@ -100,7 +101,7 @@ export function Battlefield({ view, selection, highlights, flashes, attacking, g
           <Fragment key={lane}>
             {slot(view.you, 1, lane)}
             {slot(view.you, 0, lane)}
-            <div className={cls('lane', attackLane === lane && 'hot')} />
+            <LaneEnchantments view={view} lane={lane} hot={attackLane === lane} highlights={highlights} onClick={onClick} onInspect={onInspect} onHover={onHover} />
             {slot(opponent, 0, lane)}
             {slot(opponent, 1, lane)}
           </Fragment>

@@ -23,12 +23,17 @@ describe('handleClientMessage', () => {
 
   it('démarre une partie contre l\'IA', async () => {
     await call({ type: 'startAi', deck: 'kalAzaar' });
-    expect(service.startAiGame).toHaveBeenCalledWith('p1', 'kalAzaar');
+    expect(service.startAiGame).toHaveBeenCalledWith('p1', { preset: 'kalAzaar' });
   });
 
   it('lance la recherche d\'adversaire', async () => {
     await call({ type: 'findMatch', deck: 'siegfried' });
-    expect(service.findMatch).toHaveBeenCalledWith('p1', 'siegfried');
+    expect(service.findMatch).toHaveBeenCalledWith('p1', { preset: 'siegfried' });
+  });
+
+  it('lance une partie avec un deck du joueur', async () => {
+    await call({ type: 'startAi', deck: { custom: 'deck-1' } });
+    expect(service.startAiGame).toHaveBeenCalledWith('p1', { custom: 'deck-1' });
   });
 
   it('transmet une action de jeu valide', async () => {

@@ -75,9 +75,12 @@ Serveur de comptes :
 - `GET /api/accounts/me` (en-tête `Authorization: Bearer <token>`) : compte du joueur, avec son classement et ses statistiques.
 - `GET /api/accounts/leaderboard?limit=20` : meilleurs joueurs classés.
 - `POST /internal/matches` (en-tête `x-internal-key`) : résultat d'une partie, envoyé par le serveur de jeu. Un même résultat renvoyé n'est compté qu'une fois.
+- `GET|POST /internal/accounts/:accountId/decks`, `GET|PUT|DELETE /internal/accounts/:accountId/decks/:deckId` (en-tête `x-internal-key`) : decks construits par un joueur (50 au plus par compte), enregistrés pour le serveur de jeu, qui en vérifie le contenu.
 
 Serveur de jeu :
 
 - HTTP `GET /api/decks` : decks jouables (un par héros), avec leur faction et leur héros.
-- WebSocket `/ws?token=<jeton d'accès>` : sans jeton valide, la connexion est refermée avec le code 4401. Le client envoie `startAi` ou `findMatch` (avec le `deck` choisi), `action` ou `leave` ; le serveur répond par `waiting`, `state` (vue du joueur, avec la main adverse cachée et les coups légaux) ou `error`.
+- HTTP `GET /api/catalog` : de quoi construire un deck : les 13 héros, toutes les cartes, tous les événements et les règles de construction (50 à 200 cartes ; 4 exemplaires d'une carte au plus, 1 pour une carte unique ; créatures et fortunes de la faction du héros ou neutres ; sorts des écoles de magie du héros ; 8 événements, 4 exemplaires au plus du même).
+- HTTP `GET|POST /api/my-decks`, `PUT|DELETE /api/my-decks/:deckId` (en-tête `Authorization: Bearer <token>`) : decks du joueur connecté. Un deck incomplet peut être enregistré ; `problems` liste ce qui l'empêche d'être joué.
+- WebSocket `/ws?token=<jeton d'accès>` : sans jeton valide, la connexion est refermée avec le code 4401. Le client envoie `startAi` ou `findMatch` (avec le `deck` choisi : un héros pour un deck prédéfini, ou `{ custom: <id> }` pour un deck du joueur), `action` ou `leave` ; le serveur répond par `waiting`, `state` (vue du joueur, avec la main adverse cachée et les coups légaux) ou `error`.
   Les types sont définis dans `game-server/src/route/protocol.ts` et `game-server/src/model/game-view.ts`, et reproduits côté client dans `game-client/src/api/protocol.ts`.

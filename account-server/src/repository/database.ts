@@ -26,6 +26,16 @@ export function openDatabase(path: string): DatabaseSync {
       result TEXT NOT NULL,
       recorded_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS decks (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL REFERENCES accounts (id),
+      name TEXT NOT NULL,
+      hero TEXT NOT NULL,
+      cards TEXT NOT NULL,
+      events TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS decks_account ON decks (account_id, updated_at DESC);
   `);
   return db;
 }

@@ -1,7 +1,8 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { registerHttpRoutes } from '../../../src/route/http-routes';
-import type { DeckSummary, IGameService } from '../../../src/service/game-service';
+import type { DeckSummary } from '../../../src/model/game-view';
+import type { IGameService } from '../../../src/service/game-service';
 
 const siegfried: DeckSummary = {
   id: 'siegfried', faction: 'havre', factionLabel: 'Havre', factionIcon: '🦅', description: 'desc',

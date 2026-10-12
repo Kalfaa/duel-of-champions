@@ -54,13 +54,13 @@ Source : [wiki Might and Magic](https://mightandmagic.fandom.com/wiki/Void_Risin
 | White fox | Créature | Sanctuaire | Commune | ✅ Renard blanc |
 | Wolf marksman | Créature | Havre | Commune | ✅ Tireur d'élite du Loup |
 | Yuki-onna | Créature | Sanctuaire | Commune | ✅ Yuki-onna |
-| Clashing Tides | Sort | Eau | Rare | ❌ Pas de données sur le wiki |
+| Clashing Tides | — | — | — | Pas une carte : deck préconstruit du Bastion, listé par erreur sur le wiki |
 | Curse of the Penitent | Sort | Primordiale | Rare | ✅ Malédiction du pénitent |
 | Despair | Sort | Ténèbres | Rare | ✅ Désespoir |
 | Earth's grasp | Sort | Terre | Rare | ✅ Étreinte de la terre |
 | Mass inner fire | Sort | Feu | Rare | ✅ Feu intérieur collectif |
 | Sand storm | Sort | Terre | Rare | ✅ Tempête de sable |
-| Spell steal | Sort | Primordiale | Rare | ❌ Reporté : rejouer un sort permanent adverse |
+| Spell steal | Sort | Primordiale | Rare | ✅ Vol de sort (un enchantement volé est placé sur la créature choisie) |
 | Ward against darkness | Sort | Lumière | Rare | ✅ Garde contre les ténèbres |
 | Fiery weapon | Sort | Feu | Peu commune | ✅ Arme ardente |
 | Mass dispel | Sort | Primordiale | Peu commune | ✅ Dissipation de masse |
@@ -105,8 +105,8 @@ Source : [wiki Might and Magic](https://mightandmagic.fandom.com/wiki/Void_Risin
 | Truce of Elrath | Fortune | Havre | Commune | ✅ Trêve d'Elrath |
 | Underwater fortress | Fortune | Sanctuaire | Peu commune | ✅ Forteresse sous-marine |
 | Whirlpool | Fortune | Sanctuaire | Peu commune | ✅ Tourbillon |
-| Path of the Ancestors | Événement | Neutre | Peu commune | Étape 5 |
-| Week of Austerity | Événement | Neutre | Peu commune | Étape 5 |
-| Week of the Tamed Spirits | Événement | Neutre | Peu commune | Étape 5 |
-| Week of the Wild Spirits | Événement | Neutre | Peu commune | Étape 5 |
+| Path of the Ancestors | Événement | Neutre | Peu commune | ✅ Chemin des ancêtres |
+| Week of Austerity | Événement | Neutre | Peu commune | ✅ Semaine d'austérité (créatures coûtant 4 ou plus) |
+| Week of the Tamed Spirits | Événement | Neutre | Peu commune | ✅ Semaine des esprits apprivoisés |
+| Week of the Wild Spirits | Événement | Neutre | Peu commune | ✅ Semaine des esprits sauvages |
 | Day of the Fallen Wolf | Événement | Neutre | Commune | ✅ Jour du loup déchu |

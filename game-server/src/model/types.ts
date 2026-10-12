@@ -205,6 +205,48 @@ export interface Keywords {
   chains?: number;
   /** Bloque tous les dégâts, et le sort qui l'accorde est alors détruit (Carapace de glace). */
   shell?: boolean;
+  /** Revenu : tant qu'elle est en jeu, son propriétaire reçoit N ressources de plus à son ravitaillement. */
+  income?: number;
+  /** Les sorts de son propriétaire coûtent N ressources de moins. */
+  spellDiscount?: number;
+  /** Quand une créature alliée est soignée, elle gagne +1 en attaque jusqu'à la fin du tour (Gloire ardente). */
+  healRage?: boolean;
+  /** Quand une autre couveuse alliée (non jeton) meurt, une larve 1/0/1 est déployée à sa place (Mère couveuse). */
+  breederSpawn?: boolean;
+  /** Détruite à la fin du tour de son propriétaire. */
+  ephemeral?: boolean;
+  /** La première fois par tour qu'un chevalier allié détruit une créature, toutes les piles alliées grandissent de 1. */
+  knightGrowth?: boolean;
+  /** Quand elle attaque, son propriétaire subit N dégâts. */
+  attackRecoil?: number;
+  /** Quand elle meurt, toutes les créatures sont détruites. */
+  doomsday?: boolean;
+  /** Au début du tour de son propriétaire, soigne toutes les blessures des créatures alliées. */
+  massHeal?: boolean;
+  /** Les dégâts infligés à son héros lui sont infligés à la place. */
+  heroGuard?: boolean;
+  /** Attaquer avec elle coûte N ressources. */
+  attackFee?: number;
+  /** L'attaque et la riposte des créatures ennemies de son couloir sont d'au plus N. */
+  laneCap?: number;
+  /** Peau de pierre : les dégâts de combat qu'elle subit sont divisés par deux. */
+  stoneSkin?: boolean;
+  /** Bouclier de vent : les dégâts de combat des tireurs qu'elle subit sont divisés par deux. */
+  windShield?: boolean;
+  /** Sceau de mort : détruite dès qu'elle subit des dégâts de combat. */
+  deathSeal?: boolean;
+  /** Bouclier de feu : quand elle est attaquée et blessée, l'attaquant subit autant de dégâts. */
+  fireShield?: boolean;
+  /** Agonie : après s'être déplacée ou avoir attaqué, elle subit N dégâts. */
+  agony?: number;
+  /** Gelée : elle ne peut pas bouger. */
+  frozen?: boolean;
+  /** Au début du tour de son propriétaire, elle subit N dégâts d'eau. */
+  chill?: number;
+  /** Fragile : détruite dès qu'elle subit des dégâts (Image fantôme). */
+  fragile?: boolean;
+  /** Quand elle blesse le héros ennemi, son propriétaire peut prendre un sort ou une fortune dans la main adverse (Unmei-kami). */
+  handRaid?: boolean;
 }
 
 /** Une case du plateau d'un joueur : rangée 0 = avant, 1 = arrière. */
@@ -237,7 +279,8 @@ export type Choice =
 
 export type CardZone = 'library' | 'grave' | 'revealed';
 
-export type Phase = 'action' | 'over';
+/** Mulligan : avant le premier tour, chaque joueur garde sa main de départ ou la change une fois. */
+export type Phase = 'mulligan' | 'action' | 'over';
 
 export type GameAction =
   | { type: 'develop'; choice: DevelopChoice }
@@ -249,6 +292,8 @@ export type GameAction =
   | { type: 'move'; uid: number; to: SlotRef }
   /** Choix parmi des cartes révélées après la résolution d'une carte (voir Game.pendingPick). */
   | { type: 'pick'; choice: Choice }
+  /** Avant le premier tour : garder sa main de départ, ou la remélanger dans la bibliothèque et en piocher une nouvelle. */
+  | { type: 'mulligan'; redraw: boolean }
   | { type: 'endTurn' };
 
 export const sameChoice = (a: Choice, b: Choice): boolean => {

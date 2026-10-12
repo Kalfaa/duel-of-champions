@@ -3,6 +3,7 @@ import { GameRuleError } from '../../../src/model/errors';
 import { AI_PLAYER_NAME, Game, STARTING_HAND } from '../../../src/model/game';
 import { DECKS, PLAYABLE_DECKS } from '../../../src/model/decks';
 import { newGame, place, playNow, powerNow, readyToPlay, setEvents, slot, state, unit } from './helpers';
+import { presetDeckList } from '../../../src/model/deck-list';
 
 describe('Game — mise en place et ravitaillement', () => {
   it('chaque joueur pioche 6 cartes, puis le premier pioche au début de son tour', () => {
@@ -31,10 +32,10 @@ describe('Game — mise en place et ravitaillement', () => {
 
   it('donne à l\'IA un deck d\'une autre faction que celui du joueur', () => {
     for (let seed = 0; seed < 20; seed++) {
-      const game = Game.createAgainstAi({ id: 'g', seed, player: { id: 'p', deck: 'kaiko', accountId: 'acc', name: 'Joueur' } });
+      const game = Game.createAgainstAi({ id: 'g', seed, player: { id: 'p', deck: presetDeckList('kaiko'), accountId: 'acc', name: 'Joueur' } });
       expect(game.player(1).isAi).toBe(true);
       expect(game.player(1).faction).not.toBe('sanctuaire');
-      expect(PLAYABLE_DECKS).toContain(game.player(1).deckId);
+      expect(PLAYABLE_DECKS.map(d => DECKS[d].hero)).toContain(game.player(1).heroId);
     }
   });
 
@@ -445,6 +446,53 @@ describe('Game — révélation d\'une carte jouée', () => {
   });
 });
 
+describe('Game — main', () => {
+  it('la main n\'a pas de taille maximale', () => {
+    const { game, a } = newGame();
+    state(game, a).hand = Array(12).fill('soin');
+    state(game, a).deck = ['griffonLoyal', 'cerbere'];
+    game.draw(a, 2);
+    expect(game.player(a).hand).toHaveLength(14);
+    expect(game.player(a).grave).toEqual([]);
+  });
+});
+
+describe('Game — mulligan', () => {
+  const fresh = () => Game.create({ id: 'g', seed: 5, players: [
+    { id: 'p0', deck: presetDeckList('siegfried'), isAi: false, accountId: 'acc0', name: 'Joueur 0' },
+    { id: 'p1', deck: presetDeckList('kalAzaar'), isAi: false, accountId: 'acc1', name: 'Joueur 1' },
+  ] });
+
+  it('commence par le choix de garder ou changer sa main, sans autre action possible', () => {
+    const game = fresh();
+    expect(game.phase).toBe('mulligan');
+    expect([game.canMulligan(0), game.canMulligan(1)]).toEqual([true, true]);
+    expect(() => game.develop(game.current, 'm')).toThrow('La partie n\'a pas commencé');
+    game.mulligan(0, false);
+    expect(game.phase).toBe('mulligan');
+    game.mulligan(1, false);
+    expect(game.phase).toBe('action');
+    expect(game.player(game.current).hand).toHaveLength(7);
+  });
+
+  it('changer de main remélange la main dans la bibliothèque et en pioche une nouvelle, une seule fois', () => {
+    const game = fresh();
+    const before = [...game.player(0).hand];
+    const total = before.length + game.player(0).deck.length;
+    game.mulligan(0, true);
+    expect(game.player(0).hand).toHaveLength(6);
+    expect(game.player(0).hand.length + game.player(0).deck.length).toBe(total);
+    expect(() => game.mulligan(0, true)).toThrow('Vous ne pouvez plus changer votre main.');
+  });
+
+  it('l\'IA garde sa main : seul le joueur humain choisit', () => {
+    const game = Game.createAgainstAi({ id: 'g', seed: 1, player: { id: 'p', deck: presetDeckList('siegfried'), accountId: 'acc', name: 'Alice' } });
+    expect([game.canMulligan(0), game.canMulligan(1)]).toEqual([true, false]);
+    game.mulligan(0, false);
+    expect(game.phase).toBe('action');
+  });
+});
+
 describe('Game — attaques', () => {
   it('une créature fraîchement déployée ne peut ni attaquer ni se déplacer', () => {
     const { game, a } = newGame();
@@ -476,6 +524,17 @@ describe('Game — attaques', () => {
     expect(game.locate(defender.uid)).toBeNull();
     expect(game.hasPendingRetaliation).toBe(false);
     expect(attacker.hpCur).toBe(9);
+  });
+
+  it('un défenseur détruit qui a Châtiment riposte quand même', () => {
+    const { game, a, b } = newGame();
+    const attacker = place(game, a, 'seigneurAbyssal', 0, 0); // 5/4/9
+    const defender = place(game, b, 'loupRedoutable', 0, 0); // 1/2/2, Châtiment
+    game.attack(a, attacker.uid, { kind: 'unit', uid: defender.uid });
+    expect(game.locate(defender.uid)).toBeNull();
+    expect(game.hasPendingRetaliation).toBe(true);
+    game.resolveRetaliation();
+    expect(attacker.hpCur).toBe(7);
   });
 
   it('la riposte est diffusée comme un événement, même quand elle détruit l\'attaquant', () => {
@@ -763,7 +822,7 @@ describe('Game — abandon et événements', () => {
   });
 
   it('décrit l\'issue d\'une partie contre l\'IA pour le joueur', () => {
-    const game = Game.createAgainstAi({ id: 'g', seed: 1, player: { id: 'p', deck: 'siegfried', accountId: 'acc', name: 'Alice' } });
+    const game = Game.createAgainstAi({ id: 'g', seed: 1, player: { id: 'p', deck: presetDeckList('siegfried'), accountId: 'acc', name: 'Alice' } });
     expect(game.player(0).name).toBe('Alice');
     expect(game.player(1)).toMatchObject({ name: AI_PLAYER_NAME, accountId: null });
     game.leave(0);
@@ -788,8 +847,8 @@ describe('Game — événements', () => {
 
   it('mélange les 8 événements de chaque joueur et en met deux en jeu', () => {
     const game = Game.create({ id: 'g', seed: 3, players: [
-      { id: 'p0', deck: 'siegfried', isAi: false, accountId: 'acc0', name: 'Joueur 0' },
-      { id: 'p1', deck: 'kalAzaar', isAi: false, accountId: 'acc1', name: 'Joueur 1' },
+      { id: 'p0', deck: presetDeckList('siegfried'), isAi: false, accountId: 'acc0', name: 'Joueur 0' },
+      { id: 'p1', deck: presetDeckList('kalAzaar'), isAi: false, accountId: 'acc1', name: 'Joueur 1' },
     ] });
     expect(game.events).toHaveLength(2);
     expect(game.eventDeckCount).toBe(14);

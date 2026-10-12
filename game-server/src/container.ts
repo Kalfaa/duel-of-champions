@@ -4,11 +4,14 @@ import { AiPlayer } from './model/ai-player';
 import type { Game } from './model/game';
 import { MatchmakingQueue } from './model/matchmaking-queue';
 import { HttpAccountClient, type IAccountClient } from './integration/account-client';
+import { HttpDeckStore, type IDeckStore } from './integration/deck-store';
 import { JwtTokenVerifier } from './integration/token-verifier';
 import { InMemoryGameRepository } from './repository/game-repository';
+import { registerDeckRoutes } from './route/deck-routes';
 import { registerGameSocket } from './route/game-socket';
 import { registerHttpRoutes } from './route/http-routes';
 import { AuthService } from './service/auth-service';
+import { DeckService } from './service/deck-service';
 import { DEFAULT_DELAYS, GameService, type PacingDelays } from './service/game-service';
 import type { IDelay, IIdGenerator, ISeedSource } from './service/ports';
 
@@ -20,6 +23,8 @@ export interface ContainerOptions {
   accountServer: { url: string; internalKey: string };
   /** Remplace le client du serveur de comptes (tests). */
   accountClient?: IAccountClient;
+  /** Remplace le stockage des decks des joueurs, tenu par le serveur de comptes (tests). */
+  deckStore?: IDeckStore;
   delays?: PacingDelays;
   seeds?: ISeedSource;
 }
@@ -32,6 +37,9 @@ const cryptoSeeds: ISeedSource = { next: () => randomInt(0, 2 ** 32) };
 export function buildApp(options: ContainerOptions): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
 
+  const { url, internalKey } = options.accountServer;
+  const deckService = new DeckService(options.deckStore ?? new HttpDeckStore(url, internalKey, fetch));
+  const authService = new AuthService(new JwtTokenVerifier(options.jwtSecret));
   const gameRepository = new InMemoryGameRepository(new Map<string, Game>());
   const gameService = new GameService(
     gameRepository,
@@ -40,11 +48,13 @@ export function buildApp(options: ContainerOptions): FastifyInstance {
     timerDelay,
     uuidGenerator,
     options.seeds ?? cryptoSeeds,
-    options.accountClient ?? new HttpAccountClient(options.accountServer.url, options.accountServer.internalKey, fetch, app.log),
+    options.accountClient ?? new HttpAccountClient(url, internalKey, fetch, app.log),
+    deckService,
     options.delays ?? DEFAULT_DELAYS,
   );
 
   registerHttpRoutes(app, gameService);
-  registerGameSocket(app, gameService, new AuthService(new JwtTokenVerifier(options.jwtSecret)));
+  registerDeckRoutes(app, deckService, authService);
+  registerGameSocket(app, gameService, authService);
   return app;
 }

@@ -26,3 +26,17 @@ export class SelfMatchError extends AccountRuleError {
     this.name = 'SelfMatchError';
   }
 }
+
+export class InvalidDeckNameError extends AccountRuleError {
+  constructor(maxLength: number) {
+    super(`Le nom du deck doit faire de 1 à ${maxLength} caractères.`);
+    this.name = 'InvalidDeckNameError';
+  }
+}
+
+export class TooManyDecksError extends AccountRuleError {
+  constructor(max: number) {
+    super(`Vous avez déjà ${max} decks : supprimez-en un pour en créer un autre.`);
+    this.name = 'TooManyDecksError';
+  }
+}

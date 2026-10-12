@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { fetchLeaderboard } from '../api/accounts';
-import { fetchDecks } from '../api/decks';
-import type { Account, DeckId, DeckSummary, LeaderboardEntry } from '../api/protocol';
+import { fetchDecks, fetchMyDecks } from '../api/decks';
+import type { Account, ClientDeck, DeckSummary, LeaderboardEntry, SavedDeck } from '../api/protocol';
 import type { GameMode } from '../hooks/useGame';
 import { artStyle, cls, FactionIcon } from './common';
 
 interface Props {
+  token: string;
   account: Account;
   error: string | null;
-  onStart(mode: GameMode, deck: DeckId): void;
+  onStart(mode: GameMode, deck: ClientDeck): void;
+  /** Ouvre la construction de deck : un deck du joueur à modifier, ou null pour en créer un. */
+  onEditDeck(deck: SavedDeck | null): void;
   onLogout(): void;
 }
 
@@ -53,8 +56,40 @@ export function Leaderboard({ entries, username }: { entries: LeaderboardEntry[]
   );
 }
 
-export function Menu({ account, error, onStart, onLogout }: Props) {
+/** Decks construits par le joueur : à jouer, à modifier, ou un nouveau à créer. */
+export function MyDecks({ decks, onPlay, onEdit }: {
+  decks: SavedDeck[];
+  onPlay(deck: SavedDeck): void;
+  onEdit(deck: SavedDeck | null): void;
+}) {
+  return (
+    <div className="my-decks">
+      {decks.map(d => {
+        const art = d.heroView?.art;
+        const size = Object.values(d.cards).reduce((sum, n) => sum + n, 0);
+        return (
+          <div key={d.id} className="my-deck" style={artStyle(art)}>
+            <div className="ftxt">
+              <h3 title={d.name}>{d.name}</h3>
+              {d.heroView && <div>{d.heroView.name}</div>}
+              <div>{size} cartes · {d.events.length} événements</div>
+              {d.problems[0] && <div className="my-deck-problem" title={d.problems.join('\n')}>Non jouable : {d.problems[0]}</div>}
+              <div className="my-deck-actions">
+                <button onClick={() => onPlay(d)} disabled={d.problems.length > 0}>Jouer</button>
+                <button onClick={() => onEdit(d)}>Modifier</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      <div className="my-deck new" role="button" onClick={() => onEdit(null)}>＋ Créer un deck</div>
+    </div>
+  );
+}
+
+export function Menu({ token, account, error, onStart, onEditDeck, onLogout }: Props) {
   const [decks, setDecks] = useState<DeckSummary[]>([]);
+  const [myDecks, setMyDecks] = useState<SavedDeck[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<GameMode>('ai');
@@ -64,12 +99,15 @@ export function Menu({ account, error, onStart, onLogout }: Props) {
     fetchDecks()
       .then(d => { if (!cancelled) setDecks(d); })
       .catch(() => { if (!cancelled) setLoadError('Impossible de joindre le serveur de jeu.'); });
+    fetchMyDecks(token)
+      .then(d => { if (!cancelled) setMyDecks(d); })
+      .catch(() => { if (!cancelled) setLoadError('Impossible de charger vos decks.'); });
     // Le classement est secondaire : le menu reste utilisable s'il ne se charge pas
     fetchLeaderboard()
       .then(l => { if (!cancelled) setLeaderboard(l); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [token]);
 
   return (
     <div className="menu">
@@ -98,6 +136,8 @@ export function Menu({ account, error, onStart, onLogout }: Props) {
           </div>
         ))}
       </div>
+      <h2 className="my-decks-title">Mes decks</h2>
+      <MyDecks decks={myDecks} onPlay={d => onStart(mode, { custom: d.id })} onEdit={onEditDeck} />
       {leaderboard && <Leaderboard entries={leaderboard} username={account.username} />}
       <div className="rules">
         <b>Règles</b><br />

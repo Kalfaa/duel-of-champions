@@ -1,18 +1,19 @@
 import {
-  FIRE, getCard, RELOCATE_DESTINATION, RELOCATE_TARGET, type Card, type CreatureCard, type DamageSource, type Effect, type LastingRules, type Step, type StepContext,
+  FIRE, getCard, getCreature, RELOCATE_DESTINATION, RELOCATE_TARGET, type Card, type CreatureCard, type DamageSource, type Effect, type LastingRules, type Step, type StepContext,
 } from './cards';
-import { DECKS, PLAYABLE_DECKS, type Hero, type HeroPower } from './decks';
+import { deckFaction, PLAYABLE_DECKS } from './decks';
+import { getHero, type Hero, type HeroPower } from './heroes';
+import { presetDeckList, type DeckList } from './deck-list';
 import { GameRuleError } from './errors';
-import { getEvent, type ActiveEvent } from './events';
+import { getEvent, type ActiveEvent, type OngoingEvent } from './events';
 import { SeededRandom } from './random';
 import {
   ALLOWED_ROWS, STAT_NAMES, other, sameChoice,
-  type AttackType, type Choice, type DeckId, type DevelopChoice, type FactionId, type GameAction, type Keywords,
+  type AttackType, type Choice, type DevelopChoice, type FactionId, type GameAction, type Keywords,
   type Phase, type PlayerIndex, type SlotRef, type StatKey, type Target,
 } from './types';
 
 export const STARTING_HAND = 6;
-export const MAX_HAND = 10;
 export const MAX_RESOURCES = 10;
 /** Coût en ressources de la pioche du héros. */
 export const DRAW_COST = 1;
@@ -34,6 +35,10 @@ export interface Enchantment {
   /** PV ajoutés à la créature (retirés avec l'enchantement). */
   hp?: number;
   keywords: Keywords;
+  /** L'enchantement prend fin au début du prochain tour de ce joueur (Feu intérieur). */
+  until?: PlayerIndex;
+  /** Martyr : il a empêché des dégâts ce tour-ci. */
+  triggered?: boolean;
 }
 
 /** Carte qui reste en jeu (sort global ou de couloir, fortune permanente), avec ses règles (voir LastingRules). */
@@ -46,17 +51,24 @@ export interface LastingCard {
   subject: string | null;
   /** Phalange impériale : ses bonus s'appliquent jusqu'au prochain tour de son propriétaire. */
   active: boolean;
+  /** Ligne enchantée, pour une carte de ligne. */
+  line: { player: PlayerIndex; row: number } | null;
+  /** Armure céleste, Bouclier de pierre : elle a empêché des dégâts ce tour-ci. */
+  triggered: boolean;
 }
 
 export interface Unit {
   readonly uid: number;
   readonly cardId: string;
-  readonly owner: PlayerIndex;
+  /** Joueur qui contrôle la créature (il change avec Maître des marionnettes). */
+  owner: PlayerIndex;
   readonly attackType: AttackType;
   /** Créature magique : ses dégâts de combat sont magiques. */
   readonly magic: boolean;
   /** Tour (compteur global) où la créature a été déployée : elle ne peut pas agir ce tour-là. */
-  readonly deployedTurn: number;
+  deployedTurn: number;
+  /** Jeton : il disparaît quand il quitte le jeu, sans aller au cimetière. */
+  token: boolean;
   keywords: Keywords;
   atk: number;
   ret: number;
@@ -115,7 +127,10 @@ export interface PlayerState extends Record<StatKey, number> {
   readonly accountId: string | null;
   /** Nom affiché du joueur. */
   readonly name: string;
-  readonly deckId: DeckId;
+  /** Identifiant du héros du joueur (voir heroes.ts). */
+  readonly heroId: string;
+  /** Événements apportés à la partie. */
+  readonly events: readonly string[];
   readonly faction: FactionId;
   hp: number;
   maxHp: number;
@@ -148,6 +163,17 @@ export interface PlayerState extends Record<StatKey, number> {
   freeCard: string | null;
   /** Le joueur a quitté la partie (abandon ou déconnexion). */
   left: boolean;
+  /** Le joueur ne peut plus jouer de carte ce tour-ci (Semaine du savoir). */
+  playLocked: boolean;
+  /** Types et cartes jouées ce tour-ci (Salle des tourments, Caverne de cristal). */
+  typesPlayedThisTurn: Card['type'][];
+  playedThisTurn: string[];
+  /** Tours supplémentaires à jouer après celui-ci (Saut temporel). */
+  extraTurns: number;
+  /** Carte prise dans la main adverse (Tordeur de sorts, Unmei-kami) : si elle n'est pas jouée ce tour-ci, elle repart au cimetière ou dans la main adverse. */
+  borrowed: { cardId: string; returnTo: 'grave' | 'hand' } | null;
+  /** Un chevalier allié a déjà fait grandir les piles ce tour-ci (Croisé solaire). */
+  knightGrowthUsed: boolean;
 }
 
 export type LogTone = 'turn' | 'damage' | 'action' | 'info';
@@ -201,8 +227,18 @@ export type PickReason =
   | { kind: 'discardFromHand'; sameName: boolean; purge: boolean }
   /** Dans la bibliothèque adverse : la carte va au cimetière, puis la bibliothèque est mélangée. */
   | { kind: 'millLibrary' }
-  /** Parmi les cartes du dessus de sa bibliothèque : l'une va en main, les autres dessous. */
-  | { kind: 'keepFromTop'; cards: string[] }
+  /** Dans la bibliothèque adverse : toutes ses cartes de ce nom (bibliothèque et main) vont au cimetière (Purge de Garant). */
+  | { kind: 'purgeLibrary' }
+  /** Dans la main adverse : le sort choisi rejoint la main du joueur, gratuit ce tour-ci (Tordeur de sorts). */
+  | { kind: 'borrowSpell' }
+  /** Dans la main adverse : la carte choisie rejoint la main du joueur pour ce tour (Unmei-kami). */
+  | { kind: 'raidHand' }
+  /** Dans son cimetière : la créature choisie revient en main (Cimetière). */
+  | { kind: 'graveToHand' }
+  /** Dans son cimetière : la créature choisie est déployée gratuitement sur cette case, ou sur une autre case autorisée (Autel d'Asha). */
+  | { kind: 'graveDeploy'; row: number; lane: number }
+  /** Parmi les cartes du dessus de sa bibliothèque : l'une va en main, les autres dessous (ou au cimetière). */
+  | { kind: 'keepFromTop'; cards: string[]; rest?: 'bottom' | 'grave' }
   /** Remettre les cartes du dessus dans l'ordre : chaque carte choisie est replacée au-dessus des précédentes. */
   | { kind: 'reorderTop'; remaining: string[]; placed: string[] }
   /** Simple consultation (Rapport d'espion). */
@@ -233,7 +269,7 @@ export interface StepOptions {
 
 export interface PlayerSetup {
   id: string;
-  deck: DeckId;
+  deck: DeckList;
   isAi: boolean;
   accountId: string | null;
   name: string;
@@ -269,7 +305,9 @@ const NO_DAMAGE: Readonly<DamageResult> = { dealt: 0, excess: 0 };
 export class Game {
   private players: [PlayerState, PlayerState];
   private currentPlayer: PlayerIndex = 0;
-  private currentPhase: Phase = 'action';
+  private currentPhase: Phase = 'mulligan';
+  /** Joueurs qui ont déjà gardé ou changé leur main de départ. */
+  private mulliganDone: [boolean, boolean] = [false, false];
   private turnCount = 0;
   private winnerIndex: PlayerIndex | null = null;
   private pendingPlay: PendingPlay | null = null;
@@ -295,6 +333,12 @@ export class Game {
   private resolving: { cardId: string; player: PlayerIndex } | null = null;
   /** Le joueur actif est dans sa phase de ravitaillement (Arbitre du Néant, Salles de l'inertie). */
   private supplyPhase = false;
+  /** Semaine des mercenaires : joueur qui joue ce tour-ci avec le dessus de sa bibliothèque révélé. */
+  private mercenaryWeek: PlayerIndex | null = null;
+  /** Mois des flammes dansantes : bonus d'attaque et de riposte de toutes les créatures jusqu'à la fin du tour. */
+  private danceBoost = 0;
+  /** Semaines des esprits : +1 en attaque aux créatures magiques, jusqu'à la fin du tour (null) ou au prochain tour d'un joueur. */
+  private spiritBoosts: (PlayerIndex | null)[] = [];
 
   private constructor(
     readonly id: string,
@@ -311,11 +355,11 @@ export class Game {
   /** Partie contre l'IA : elle joue un deck d'une autre faction que celui du joueur, tiré au hasard. */
   static createAgainstAi(opts: { id: string; seed: number; player: Omit<PlayerSetup, 'isAi'> }): Game {
     const rng = new SeededRandom(opts.seed);
-    const faction = DECKS[opts.player.deck].faction;
-    const aiDeck = rng.pick(PLAYABLE_DECKS.filter(d => DECKS[d].faction !== faction));
+    const faction = getHero(opts.player.deck.hero).faction;
+    const aiDeck = rng.pick(PLAYABLE_DECKS.filter(d => deckFaction(d) !== faction));
     return new Game(opts.id, rng, [
       { ...opts.player, isAi: false },
-      { id: AI_PLAYER_ID, deck: aiDeck, isAi: true, accountId: null, name: AI_PLAYER_NAME },
+      { id: AI_PLAYER_ID, deck: presetDeckList(aiDeck), isAi: true, accountId: null, name: AI_PLAYER_NAME },
     ]).start();
   }
 
@@ -328,6 +372,7 @@ export class Game {
       players: structuredClone(this.players),
       currentPlayer: this.currentPlayer,
       currentPhase: this.currentPhase,
+      mulliganDone: [...this.mulliganDone],
       turnCount: this.turnCount,
       winnerIndex: this.winnerIndex,
       pendingPlay: structuredClone(this.pendingPlay),
@@ -344,6 +389,9 @@ export class Game {
       pendingPickState: structuredClone(this.pendingPickState),
       resolving: this.resolving,
       supplyPhase: this.supplyPhase,
+      mercenaryWeek: this.mercenaryWeek,
+      danceBoost: this.danceBoost,
+      spiritBoosts: [...this.spiritBoosts],
     });
     return copy;
   }
@@ -381,7 +429,7 @@ export class Game {
   get lasting(): readonly LastingCard[] { return this.lastingCards; }
 
   hero(pi: PlayerIndex): Hero {
-    return DECKS[this.players[pi].deckId].hero;
+    return getHero(this.players[pi].heroId);
   }
 
   heroName(pi: PlayerIndex): string {
@@ -396,7 +444,8 @@ export class Game {
   statOf(pi: PlayerIndex, stat: StatKey): number {
     const key = stat === 'd' ? 'lucky' : stat === 'g' ? 'magicChannel' : null;
     const bonus = key ? this.units(pi).reduce((sum, x) => sum + (x.unit.keywords[key] ?? 0), 0) : 0;
-    return this.players[pi][stat] + bonus;
+    const lasting = this.lastingCards.reduce((sum, e) => sum + (e.owner === pi ? rulesOf(e).statBonus?.[stat] ?? 0 : 0), 0);
+    return this.players[pi][stat] + bonus + lasting;
   }
 
   /** Index du joueur encore présent dans la partie, ou null. */
@@ -511,14 +560,23 @@ export class Game {
     const honorAttack = unit.keywords.honor ? this.hero(unit.owner).passive?.honorAttack ?? 0 : 0;
     const base = unit.keywords.mightStats ? this.statOf(unit.owner, 'm') : unit.atk;
     const discardRage = this.players[other(unit.owner)].discardedThisTurn ? unit.keywords.discardRage ?? 0 : 0;
-    return Math.max(0, base + unit.boost + this.statBonus(unit, 'atk') + honorAttack + discardRage);
+    return this.capped(unit, Math.max(0, base + unit.boost + this.statBonus(unit, 'atk') + honorAttack + discardRage));
+  }
+
+  /** Une créature ennemie de son couloir plafonne son attaque et sa riposte (Céleste). */
+  private capped(unit: Unit, value: number): number {
+    const found = this.locate(unit.uid);
+    if (!found) return value;
+    const cap = this.units(other(found.owner)).reduce((min, x) => (x.lane === found.lane && x.unit.keywords.laneCap !== undefined
+      ? Math.min(min, x.unit.keywords.laneCap) : min), Infinity);
+    return Math.min(value, cap);
   }
 
   /** Riposte actuelle de la créature (au minimum 0) : comme l'attaque, plus les auras des autres créatures alliées. */
   retaliationOf(unit: Unit): number {
     const aura = this.units(unit.owner).reduce((sum, x) => sum + (x.unit === unit ? 0 : x.unit.keywords.retAura ?? 0), 0);
     const base = unit.keywords.mightStats ? this.statOf(unit.owner, 'm') : unit.ret;
-    return Math.max(0, base + this.statBonus(unit, 'ret') + aura);
+    return this.capped(unit, Math.max(0, base + this.statBonus(unit, 'ret') + aura));
   }
 
   /**
@@ -545,7 +603,8 @@ export class Game {
 
   /** La créature ne peut pas bouger : immobilisée (Toucher gelé) ou hypnotisée par une créature ennemie de son couloir. */
   isImmobilized(unit: Unit): boolean {
-    if (unit.immobileUntil !== null) return true;
+    if (unit.immobileUntil !== null || this.keywordsOf(unit).frozen) return true;
+    if (this.lastingCards.some(entry => rulesOf(entry).immobilized?.(this, unit, entry))) return true;
     const found = this.locate(unit.uid);
     return !!found && this.units(other(found.owner)).some(x => x.lane === found.lane && this.keywordsOf(x.unit).hypnotize);
   }
@@ -609,7 +668,8 @@ export class Game {
     }, 0);
     const lasting = this.lastingCards.reduce((sum, entry) => sum + (rulesOf(entry).costDelta?.(this, pi, card, entry) ?? 0), 0);
     const blood = card.type === 'creature' && card.keywords.bloodDiscount ? this.deathsThisTurn : 0;
-    return Math.max(0, cost + events + lasting - blood);
+    const spells = card.type === 'spell' ? this.units(pi).reduce((sum, x) => sum + (x.unit.keywords.spellDiscount ?? 0), 0) : 0;
+    return Math.max(0, cost + events + lasting - blood - spells);
   }
 
   /** Raison pour laquelle la carte ne peut pas être jouée, ou null si elle le peut. */
@@ -626,6 +686,10 @@ export class Game {
       return event.kind === 'ongoing' && event.maxCardsPerTurn !== undefined ? Math.min(min, event.maxCardsPerTurn) : min;
     }, Infinity);
     if (p.cardsPlayedThisTurn >= limit) return `Vous ne pouvez pas jouer plus de ${limit} cartes par tour.`;
+    if (p.playLocked || this.lastingCards.some(e => e.owner === pi && rulesOf(e).locksOwnerPlays)) return 'Vous ne pouvez plus jouer de carte ce tour-ci.';
+    if (this.lastingCards.some(e => e.owner !== pi && rulesOf(e).forbidsSubject && e.subject === card.type)) {
+      return 'Vous ne pouvez pas jouer ce type de carte ce tour-ci.';
+    }
     if (card.type === 'creature' && this.lastingCards.some(e => rulesOf(e).forbidsDeploy?.(this, pi, e))) {
       return 'Vous ne pouvez pas déployer de créature ce tour-ci.';
     }
@@ -663,7 +727,7 @@ export class Game {
     if (event.kind === 'ongoing') return 'Cet événement est permanent : il ne s\'utilise pas.';
     if (this.eventsUsed[slot]) return 'Vous avez déjà utilisé cet événement ce tour-ci.';
     if (this.players[pi].res < event.cost) return 'Pas assez de ressources.';
-    return this.stepsError(this.eventSteps(pi, slot));
+    return event.effect.requirement?.(this, pi) ?? this.stepsError(this.eventSteps(pi, slot));
   }
 
   /** Raison pour laquelle la créature ne peut ni attaquer ni se déplacer, ou null. */
@@ -680,6 +744,8 @@ export class Game {
     const unit = this.locate(uid)!.unit;
     if (this.hasUsed(unit, 'attack')) return 'Cette créature a déjà agi ce tour-ci.';
     if (this.cannotAttack(unit)) return 'Cette créature ne peut pas attaquer ce tour-ci.';
+    const fee = this.keywordsOf(unit).attackFee ?? 0;
+    if (this.players[pi].res < fee) return `Attaquer avec cette créature coûte ${fee} ressource${fee > 1 ? 's' : ''}.`;
     return this.attackOf(unit) > 0 ? null : 'Cette créature n\'a pas d\'attaque.';
   }
 
@@ -707,7 +773,8 @@ export class Game {
     } else if (!front && !back) {
       targets = [hero];
     } else {
-      const reachable = unit.attackType === 'shooter' ? [front, back] : [front ?? back];
+      const backLine = unit.attackType === 'shooter' || this.lastingCards.some(e => e.owner === pi && rulesOf(e).reachesBackLine);
+      const reachable = backLine ? [front, back] : [front ?? back];
       targets = reachable.filter((u): u is Unit => !!u).map(toTarget);
     }
     const might = getCard(unit.cardId).req.m ?? 0;
@@ -798,7 +865,9 @@ export class Game {
       if (moved?.kind === 'unit' && to?.kind === 'cell') this.relocate(moved.uid, to);
       return;
     }
-    if (card.arrival && this.locate(unit.uid)) card.arrival.apply(this, pi, { choices: rest, taken: [], self: unit.uid });
+    // Sans cible possible au moment de jouer la carte, ses étapes ont été sautées : l'effet à l'arrivée n'a pas lieu
+    const arrival = card.arrival;
+    if (arrival && rest.length >= arrival.steps.length && this.locate(unit.uid)) arrival.apply(this, pi, { choices: rest, taken: [], self: unit.uid });
   }
 
   /** La créature peut être attaquée : ni protégée par la Peur contre cet attaquant, ni par une créature Imposante. */
@@ -833,8 +902,37 @@ export class Game {
       case 'attack': return this.attack(pi, action.uid, action.target);
       case 'move': return this.moveUnit(pi, action.uid, action.to);
       case 'pick': return this.pick(pi, action.choice);
+      case 'mulligan': return this.mulligan(pi, action.redraw);
       case 'endTurn': return this.endTurn(pi);
     }
+  }
+
+  /** Le joueur peut encore garder ou changer sa main de départ. */
+  canMulligan(pi: PlayerIndex): boolean {
+    return this.currentPhase === 'mulligan' && !this.mulliganDone[pi] && !this.players[pi].left;
+  }
+
+  /**
+   * Avant le premier tour : le joueur garde sa main de départ, ou la remélange dans sa bibliothèque et pioche une
+   * nouvelle main (une seule fois). Le premier tour commence quand les deux joueurs ont choisi.
+   */
+  mulligan(pi: PlayerIndex, redraw: boolean): void {
+    if (!this.canMulligan(pi)) throw new GameRuleError('Vous ne pouvez plus changer votre main.');
+    this.mulliganDone[pi] = true;
+    const p = this.players[pi];
+    if (redraw) {
+      const size = p.hand.length;
+      p.deck.push(...p.hand);
+      p.hand = [];
+      this.rng.shuffle(p.deck);
+      this.supplyPhase = true;
+      this.draw(pi, size);
+      this.supplyPhase = false;
+      this.addLog(`${this.heroName(pi)} change sa main de départ.`, 'info', pi);
+    } else {
+      this.addLog(`${this.heroName(pi)} garde sa main de départ.`, 'info', pi);
+    }
+    if (this.mulliganDone.every(Boolean)) this.beginGame();
   }
 
   /** Action du héros : +1 dans une caractéristique (gratuit), ou piocher une carte (1 ressource). */
@@ -867,7 +965,13 @@ export class Game {
 
     p.res -= this.cardCost(pi, card);
     if (p.freeCard === card.id) p.freeCard = null;
+    if (card.type === 'creature' && this.ongoingEvents().some(e => e.taxesBigCreatures) && card.cost >= 4) {
+      if (p.res >= 1) p.res--;
+      else this.damageHero(pi, 1);
+    }
     p.cardsPlayedThisTurn++;
+    p.typesPlayedThisTurn.push(card.type);
+    p.playedThisTurn.push(card.id);
     const [, ...taken] = this.takeFromHand(pi, [handIndex, ...handIndices(choices)]);
     this.pendingPlay = { kind: 'card', player: pi, cardId: card.id, choices: [...choices], taken };
     const target = choices.find(c => c.kind === 'unit' || c.kind === 'hero');
@@ -875,7 +979,11 @@ export class Game {
     else this.addLog(`${this.heroName(pi)} joue ${card.name}${target ? ' sur ' + this.targetName(target as Target) : ''}.`, 'action', pi);
     this.imposeDiscards(pi);
     for (const entry of this.lastingCards) {
-      if (rulesOf(entry).punishesPlays && entry.owner !== pi && entry.subject === card.type) this.discardRandom(pi);
+      const rules = rulesOf(entry);
+      if (entry.owner === pi) continue;
+      if (rules.punishesPlays && entry.subject === card.type) this.discardRandom(pi);
+      if (rules.discardOnEnemyPlay) this.discardRandom(pi);
+      if (rules.healOnEnemyPlay) this.healHero(entry.owner, rules.healOnEnemyPlay);
     }
   }
 
@@ -913,7 +1021,11 @@ export class Game {
     this.resolving = null;
     if (card.lasting) {
       const lane = choices.find(c => c.kind === 'lane');
-      this.lastingCards.push({ cardId: card.id, owner: pi, lane: lane?.kind === 'lane' ? lane.lane : null, subject: subjectCard, active: false });
+      const line = choices.find(c => c.kind === 'line');
+      this.lastingCards.push({
+        cardId: card.id, owner: pi, lane: lane?.kind === 'lane' ? lane.lane : null, subject: subjectCard, active: false,
+        line: line?.kind === 'line' ? { player: line.player, row: line.row } : null, triggered: false,
+      });
     } else if (!card.ongoing) {
       this.bury(pi, [card.id]);
     }
@@ -963,6 +1075,8 @@ export class Game {
     unit.acted = true;
     unit.attacked = true;
     unit.attacks += 1;
+    const fee = this.keywordsOf(unit).attackFee ?? 0;
+    if (fee) this.players[pi].res -= fee;
     this.performAttack(pi, unit, target);
   }
 
@@ -974,7 +1088,14 @@ export class Game {
 
     const k = this.keywordsOf(unit);
     if (k.rampage) this.addCounters(unit, 'boost', 1);
-    this.poisonousBulbs(unit);
+    this.trapAttacker(unit);
+    if (k.attackRecoil) this.damageHero(pi, k.attackRecoil);
+    if (!this.locate(uid) || this.isOver) return;
+    if (this.meleeWall(unit)) {
+      this.addLog(`Le mur de pierre arrête l'attaque de ${name}.`, 'info', pi);
+      this.afterAttack(unit);
+      return;
+    }
 
     let drained = false;
     let reprisal: Reprisal = { destroy: false, damage: 0 };
@@ -984,6 +1105,7 @@ export class Game {
       drained = atk > 0;
       this.damageHero(target.player, atk);
       if (atk > 0 && k.blackmail) this.blackmail(pi);
+      if (atk > 0 && k.handRaid) this.raidHand(pi);
     } else {
       this.addLog(`${name} attaque ${this.targetName(target)}.`, 'action', pi);
       const defender = this.locate(target.uid)!.unit;
@@ -997,13 +1119,20 @@ export class Game {
       const atk = this.attackOf(unit);
       const struck = [target.uid, ...this.extraStrikes(unit, target.uid)];
       const blasted = k.areaBlast ? this.adjacentUnits(target.uid) : [];
+      let killed = false;
       for (const defenderUid of struck) {
         const { dealt, excess } = this.strike(unit, atk, defenderUid);
         if (dealt > 0) drained = true;
         const hit = this.locate(defenderUid)?.unit;
+        if (!hit) killed = true;
         if (dealt > 0 && hit) this.onAttackDamage(pi, k, hit);
         if (!hit && excess > 0 && k.trample && defenderUid === target.uid) this.damageHero(other(pi), excess);
+        if (dealt > 0 && defenderUid === target.uid && dk.fireShield && this.locate(uid)) {
+          this.addLog(`Le bouclier de feu renvoie ${dealt} dégâts.`, 'damage', defender.owner);
+          this.damageUnit(uid, dealt, { ...FIRE, owner: defender.owner });
+        }
       }
+      if (killed && getCreature(unit.cardId).tribe === 'knight') this.knightGrowth(pi);
       const blast = k.areaBlast ?? 0;
       blasted.forEach(u => this.damageUnit(u.uid, blast, this.unitSource(unit)));
       const survived = this.locate(target.uid) !== null;
@@ -1024,8 +1153,9 @@ export class Game {
     if (reprisal.destroy) this.destroyUnit(attacker.uid);
   }
 
-  /** Fin d'une attaque : la créature perd sa rage. */
+  /** Fin d'une attaque : Agonie, puis la créature perd sa rage. */
   private afterAttack(unit: Unit): void {
+    this.sufferAgony(unit);
     const found = this.locate(unit.uid);
     if (!found || this.isOver) return;
     const keepsEnrage = this.lastingCards.some(e => e.owner === unit.owner && rulesOf(e).keepsEnrage);
@@ -1067,6 +1197,7 @@ export class Game {
     if (!this.keywordsOf(found.unit).swift) found.unit.acted = true;
     this.addLog(`${getCard(found.unit.cardId).name} se déplace.`, 'action', pi);
     if (to.lane !== found.lane) this.enterLane(found.unit, to.lane);
+    this.sufferAgony(found.unit);
     this.settle();
   }
 
@@ -1091,9 +1222,10 @@ export class Game {
       if (unit.keywords.mending && !unit.attacked) this.healUnit(unit.uid, unit.hpMax - unit.hpCur);
     }
     for (const { unit } of this.units(pi)) {
-      if (unit.doomed === 'destroy') this.destroyUnit(unit.uid);
+      if (unit.doomed === 'destroy' || unit.keywords.ephemeral) this.destroyUnit(unit.uid);
       else if (unit.doomed === 'banish') this.banishUnit(unit.uid);
     }
+    this.endOfTurnTriggers(pi);
     for (const q of [0, 1] as const) {
       this.units(q).forEach(x => {
         x.unit.tempAttack = 0;
@@ -1111,9 +1243,55 @@ export class Game {
     p.seesOpponentHand = false;
     p.recentDead = [];
     p.freeCard = null;
+    this.returnBorrowed(pi);
+    this.mercenaryWeek = null;
+    this.danceBoost = 0;
+    this.spiritBoosts = this.spiritBoosts.filter(until => until !== null);
     this.rotateEvents();
+    if (p.extraTurns > 0 && !this.isOver) {
+      p.extraTurns--;
+      this.addLog(`${this.heroName(pi)} joue un tour supplémentaire.`, 'turn', pi);
+      this.beginTurn(true);
+      return;
+    }
     this.currentPlayer = other(pi);
     this.beginTurn();
+  }
+
+  /**
+   * Fin du tour du joueur : Salle des tourments adverse, puis les protections qui ont servi ce tour-ci sont détruites
+   * (Armure céleste, Bouclier de pierre, créature du Martyr).
+   */
+  private endOfTurnTriggers(pi: PlayerIndex): void {
+    const p = this.players[pi];
+    for (const entry of this.lastingCards) {
+      const torment = rulesOf(entry).tormentIfNotPlayed;
+      if (!torment || entry.owner === pi || p.typesPlayedThisTurn.includes(entry.subject as Card['type'])) continue;
+      this.addLog(`La salle des tourments frappe ${this.heroName(pi)} (${torment}).`, 'damage', pi);
+      this.damageHero(pi, torment);
+    }
+    for (let i = this.lastingCards.length - 1; i >= 0; i--) {
+      const entry = this.lastingCards[i]!;
+      if (entry.triggered && rulesOf(entry).preventsDamage) this.destroyLasting(i);
+    }
+    for (const q of [0, 1] as const) {
+      for (const { unit } of this.units(q)) {
+        if (unit.enchantments.some(e => e.triggered)) this.destroyUnit(unit.uid);
+      }
+    }
+  }
+
+  /** Tordeur de sorts, Unmei-kami : la carte empruntée et non jouée retourne au cimetière ou dans la main adverse. */
+  private returnBorrowed(pi: PlayerIndex): void {
+    const p = this.players[pi];
+    const borrowed = p.borrowed;
+    p.borrowed = null;
+    if (borrowed === null) return;
+    const index = p.hand.indexOf(borrowed.cardId);
+    if (index === -1) return;
+    p.hand.splice(index, 1);
+    if (borrowed.returnTo === 'hand') this.addToHand(other(pi), borrowed.cardId);
+    else this.bury(other(pi), [borrowed.cardId]);
   }
 
   /** Le joueur quitte la partie ; si elle est en cours, il abandonne. */
@@ -1131,7 +1309,7 @@ export class Game {
   //  Primitives utilisées par les effets de cartes
   // ==================================================================
   /** Pioche ; chaque carte manquante dans la bibliothèque coûte 1 PV. */
-  draw(pi: PlayerIndex, n: number, silent = false): void {
+  draw(pi: PlayerIndex, n: number): void {
     const p = this.players[pi];
     if (!this.supplyPhase && n > 0 && this.drawLocked()) {
       this.addLog('Personne ne peut piocher en dehors de sa phase de ravitaillement.', 'info', pi);
@@ -1144,7 +1322,7 @@ export class Game {
         this.damageHero(pi, 1);
         continue;
       }
-      this.addToHand(pi, cardId, silent);
+      this.addToHand(pi, cardId);
     }
   }
 
@@ -1273,7 +1451,7 @@ export class Game {
     for (const pi of [0, 1] as const) {
       for (const { unit, row, lane } of this.units(pi)) {
         this.players[pi].board[row]![lane] = null;
-        for (let i = 0; i < unit.stack; i++) this.addToHand(pi, unit.cardId);
+        if (!unit.token) for (let i = 0; i < unit.stack; i++) this.addToHand(pi, unit.cardId);
         for (const e of unit.enchantments) this.addToHand(e.owner, e.cardId);
       }
     }
@@ -1327,17 +1505,33 @@ export class Game {
       this.addLog(`${getCard(unit.cardId).name} est banni.`, 'damage', null);
     } else {
       this.deathsThisTurn += unit.stack;
-      this.bury(found.owner, Array<string>(unit.stack).fill(unit.cardId));
+      if (!unit.token) this.bury(found.owner, Array<string>(unit.stack).fill(unit.cardId));
       this.addLog(`${getCard(unit.cardId).name} est détruit.`, 'damage', null);
     }
-    for (const e of unit.enchantments) this.bury(e.owner, [e.cardId]);
+    this.releaseEnchantments(found);
     this.onLeave(found);
     this.deathTriggers(found);
     this.settle();
   }
 
+  /**
+   * Dégâts au héros : une Garde impériale alliée les subit à sa place ; Armure céleste et Bouclier de pierre
+   * les empêchent.
+   */
   damageHero(pi: PlayerIndex, n: number): void {
     if (n <= 0 || this.isOver) return;
+    const guard = this.units(pi).find(x => this.keywordsOf(x.unit).heroGuard);
+    if (guard) {
+      this.addLog(`${getCard(guard.unit.cardId).name} protège ${this.heroName(pi)}.`, 'info', pi);
+      this.damageUnit(guard.unit.uid, n, { magic: false });
+      return;
+    }
+    const armour = this.lastingCards.find(e => e.owner === pi && rulesOf(e).preventsDamage);
+    if (armour) {
+      armour.triggered = true;
+      this.addLog(`${getCard(armour.cardId).name} empêche les dégâts infligés à ${this.heroName(pi)}.`, 'info', pi);
+      return;
+    }
     const p = this.players[pi];
     p.hp -= n;
     this.pendingEvents.push({ kind: 'damage', target: { kind: 'hero', player: pi }, amount: n });
@@ -1354,6 +1548,8 @@ export class Game {
     if (healed <= 0) return;
     unit.hpCur += healed;
     this.pendingEvents.push({ kind: 'heal', target: { kind: 'unit', uid }, amount: healed });
+    const rage = this.units(unit.owner).filter(x => x.unit.keywords.healRage).length;
+    if (rage) this.boostUntilEndOfTurn(uid, rage);
   }
 
   healHero(pi: PlayerIndex, n: number): void {
@@ -1365,14 +1561,17 @@ export class Game {
   }
 
   /** Attache un sort permanent à la créature ; ses modifications s'appliquent tant qu'il reste attaché. */
-  enchant(uid: number, cardId: string, caster: PlayerIndex, mods: { atk?: number; ret?: number; hp?: number; keywords?: Keywords }): void {
+  enchant(uid: number, cardId: string, caster: PlayerIndex, mods: { atk?: number; ret?: number; hp?: number; keywords?: Keywords; until?: PlayerIndex }): void {
     const unit = this.locate(uid)?.unit;
     if (!unit || this.isShielded(unit)) {
       this.bury(caster, [cardId]);
       return;
     }
     const hp = mods.hp ?? 0;
-    unit.enchantments.push({ cardId, owner: caster, atk: mods.atk ?? 0, ret: mods.ret ?? 0, hp, keywords: { ...mods.keywords } });
+    unit.enchantments.push({
+      cardId, owner: caster, atk: mods.atk ?? 0, ret: mods.ret ?? 0, hp, keywords: { ...mods.keywords },
+      ...(mods.until === undefined ? {} : { until: mods.until }),
+    });
     unit.hpMax += hp;
     unit.hpCur += hp;
     this.pendingEvents.push({ kind: 'buff', target: { kind: 'unit', uid } });
@@ -1405,6 +1604,28 @@ export class Game {
     unit.enchantments = [];
     for (const e of enchantments) this.removeEnchantmentEffects(unit, e);
     for (const e of enchantments) this.bury(e.owner, [e.cardId]);
+  }
+
+  /**
+   * Les enchantements d'une créature qui quitte le jeu : un sort persistant enchante une autre créature au hasard
+   * de son camp, les autres vont au cimetière de leur lanceur.
+   */
+  private releaseEnchantments({ unit, owner }: PlacedUnit): void {
+    const enchantments = unit.enchantments;
+    unit.enchantments = [];
+    for (const e of enchantments) {
+      const card = getCard(e.cardId);
+      const others = this.units(owner).filter(x => x.unit !== unit).map(x => x.unit);
+      if (card.type === 'creature' || !card.persistent || !others.length) {
+        this.bury(e.owner, [e.cardId]);
+        continue;
+      }
+      const next = others[Math.floor(this.rng.next() * others.length)]!;
+      next.enchantments.push({ ...e, triggered: false });
+      next.hpMax += e.hp ?? 0;
+      next.hpCur += e.hp ?? 0;
+      this.addLog(`${card.name} enchante ${getCard(next.cardId).name}.`, 'info', e.owner);
+    }
   }
 
   /** Retire les PV accordés par un enchantement qui disparaît ; la créature meurt si elle n'en a plus. */
@@ -1444,8 +1665,8 @@ export class Game {
     if (!found) return;
     const { unit, owner } = found;
     this.players[owner].board[found.row]![found.lane] = null;
-    for (const e of unit.enchantments) this.bury(e.owner, [e.cardId]);
-    for (let i = 0; i < unit.stack; i++) this.addToHand(owner, unit.cardId);
+    this.releaseEnchantments(found);
+    if (!unit.token) for (let i = 0; i < unit.stack; i++) this.addToHand(owner, unit.cardId);
     this.addLog(`${getCard(unit.cardId).name} retourne dans la main de ${this.heroName(owner)}.`, 'info', owner);
     this.onLeave(found);
     this.settle();
@@ -1549,7 +1770,7 @@ export class Game {
     const found = this.locate(uid);
     if (!found) return;
     this.players[found.owner].board[found.row]![found.lane] = null;
-    for (const e of found.unit.enchantments) this.bury(e.owner, [e.cardId]);
+    this.releaseEnchantments(found);
     this.addLog(`${getCard(found.unit.cardId).name} est banni.`, 'info', null);
     this.onLeave(found);
     this.settle();
@@ -1633,10 +1854,51 @@ export class Game {
     this.offerCards(pi, { kind: 'millLibrary' }, 'Choisissez la carte de la bibliothèque adverse à mettre au cimetière.', ids);
   }
 
-  /** Le joueur regarde les N cartes du dessus de sa bibliothèque et en garde une. */
-  pickFromTop(pi: PlayerIndex, n: number): void {
+  /** Le joueur regarde les N cartes du dessus de sa bibliothèque et en garde une ; les autres vont dessous (ou au cimetière). */
+  pickFromTop(pi: PlayerIndex, n: number, rest: 'bottom' | 'grave' = 'bottom'): void {
     const cards = this.players[pi].deck.slice(-n).reverse();
-    this.offerCards(pi, { kind: 'keepFromTop', cards }, 'Choisissez la carte à prendre en main ; les autres vont sous la bibliothèque.', cards);
+    const where = rest === 'grave' ? 'au cimetière' : 'sous la bibliothèque';
+    this.offerCards(pi, { kind: 'keepFromTop', cards, rest }, `Choisissez la carte à prendre en main ; les autres vont ${where}.`, cards);
+  }
+
+  /** La bibliothèque adverse est révélée : toutes les cartes du nom choisi (bibliothèque et main) vont au cimetière. */
+  purgeOpponentLibrary(pi: PlayerIndex): void {
+    const ids = this.players[other(pi)].deck;
+    if (!ids.length) return;
+    this.offerCards(pi, { kind: 'purgeLibrary' }, 'Choisissez la carte de l\'adversaire à purger.', ids);
+  }
+
+  /**
+   * Unmei-kami : le joueur regarde la main adverse et peut y prendre un sort ou une fortune dont il remplit les conditions,
+   * qu'il pourra jouer ce tour-ci en payant son coût.
+   */
+  raidHand(pi: PlayerIndex): void {
+    const ids = [...new Set(this.players[other(pi)].hand.filter(id => {
+      const card = getCard(id);
+      return card.type !== 'creature' && this.requirementError(pi, card.req) === null && this.cardCost(pi, card) <= this.players[pi].res;
+    }))];
+    if (!ids.length) return;
+    this.pendingPickState = {
+      player: pi, reason: { kind: 'raidHand' }, labels: ['Ne rien prendre'], revealed: ids,
+      prompt: 'Choisissez le sort ou la fortune adverse à jouer ce tour-ci (en payant son coût).',
+      options: [{ kind: 'mode', index: 0 }, ...ids.map((cardId): Choice => ({ kind: 'card', zone: 'revealed', cardId }))],
+    };
+  }
+
+  /** Le joueur choisit une créature de son cimetière, qui revient en main (`hand`) ou est déployée gratuitement près de cette case. */
+  pickGraveCreature(pi: PlayerIndex, then: 'hand' | SlotRef): void {
+    const ids = this.players[pi].grave.filter(id => getCard(id).type === 'creature');
+    if (then === 'hand') this.offerCards(pi, { kind: 'graveToHand' }, 'Choisissez la créature à reprendre en main.', ids);
+    else this.offerCards(pi, { kind: 'graveDeploy', row: then.row, lane: then.lane }, 'Choisissez la créature à déployer gratuitement.', ids);
+  }
+
+  /** La main adverse est révélée : le joueur y prend un sort non unique, qu'il peut jouer gratuitement ce tour-ci. */
+  borrowOpponentSpell(pi: PlayerIndex): void {
+    const ids = this.players[other(pi)].hand.filter(id => {
+      const card = getCard(id);
+      return card.type === 'spell' && card.rarity !== 'unique';
+    });
+    this.offerCards(pi, { kind: 'borrowSpell' }, 'Choisissez le sort à jouer gratuitement ce tour-ci (sinon il va au cimetière adverse).', ids);
   }
 
   /** Le joueur remet les N cartes du dessus de sa bibliothèque dans l'ordre de son choix. */
@@ -1704,7 +1966,8 @@ export class Game {
         reason.cards.forEach(() => deck.pop());
         const rest = [...reason.cards];
         rest.splice(rest.indexOf(cardId), 1);
-        deck.unshift(...rest);
+        if (reason.rest === 'grave') this.bury(pi, rest);
+        else deck.unshift(...rest);
         this.addToHand(pi, cardId);
         return;
       }
@@ -1731,15 +1994,56 @@ export class Game {
         return;
       case 'smash':
         if (choice.kind === 'lasting') this.destroyLasting(choice.index);
-        if (choice.kind === 'unit') {
-          const unit = this.locate(choice.uid)?.unit;
-          const last = unit?.enchantments.pop();
-          if (unit && last) {
-            this.removeEnchantmentEffects(unit, last);
-            this.bury(last.owner, [last.cardId]);
-          }
-        }
+        if (choice.kind === 'unit') this.destroyLastEnchantment(choice.uid);
         return;
+      case 'purgeLibrary': {
+        if (!cardId) return;
+        const p = this.players[foe];
+        const fromLibrary = p.deck.filter(id => id === cardId);
+        p.deck = p.deck.filter(id => id !== cardId);
+        const fromHand = p.hand.filter(id => id === cardId);
+        p.hand = p.hand.filter(id => id !== cardId);
+        this.bury(foe, fromLibrary);
+        this.discard(foe, fromHand);
+        this.rng.shuffle(p.deck);
+        this.addLog(`Toutes les cartes ${getCard(cardId).name} de ${this.heroName(foe)} vont au cimetière.`, 'info', foe);
+        return;
+      }
+      case 'raidHand': {
+        if (!cardId) return;
+        const hand = this.players[foe].hand;
+        const index = hand.indexOf(cardId);
+        if (index === -1) return;
+        hand.splice(index, 1);
+        this.addToHand(pi, cardId);
+        this.players[pi].borrowed = { cardId, returnTo: 'hand' };
+        this.addLog(`${this.heroName(pi)} s'empare de ${getCard(cardId).name}.`, 'info', pi);
+        return;
+      }
+      case 'graveToHand':
+        if (cardId) this.returnFromGrave(pi, cardId);
+        return;
+      case 'graveDeploy': {
+        const card = cardId ? getCard(cardId) : null;
+        if (!card || card.type !== 'creature') return;
+        const slots = this.placementSlots(pi, card.attackType);
+        const slot = slots.find(x => x.row === reason.row && x.lane === reason.lane) ?? slots[0];
+        if (slot) this.deployFromGrave(pi, card.id, slot);
+        return;
+      }
+      case 'borrowSpell': {
+        if (!cardId) return;
+        const hand = this.players[foe].hand;
+        const index = hand.indexOf(cardId);
+        if (index === -1) return;
+        hand.splice(index, 1);
+        const p = this.players[pi];
+        this.addToHand(pi, cardId);
+        p.freeCard = cardId;
+        p.borrowed = { cardId, returnTo: 'grave' };
+        this.addLog(`${this.heroName(pi)} s'empare de ${getCard(cardId).name}.`, 'info', pi);
+        return;
+      }
       case 'songTarget':
         if (choice.kind !== 'unit') return;
         this.pendingPickState = {
@@ -1781,6 +2085,141 @@ export class Game {
     this.pendingEvents.push({ kind: 'buff', target: { kind: 'unit', uid } });
   }
 
+  /** La créature est immobilisée jusqu'au prochain tour de ce joueur. */
+  immobilize(uid: number, until: PlayerIndex): void {
+    const unit = this.locate(uid)?.unit;
+    if (unit) unit.immobileUntil = until;
+  }
+
+  /** Détruit le dernier sort permanent attaché à la créature. */
+  destroyLastEnchantment(uid: number): void {
+    const unit = this.locate(uid)?.unit;
+    const last = unit?.enchantments.pop();
+    if (!unit || !last) return;
+    this.bury(last.owner, [last.cardId]);
+    this.addLog(`${getCard(last.cardId).name} est détruit.`, 'info', last.owner);
+    this.removeEnchantmentEffects(unit, last);
+  }
+
+  /** Vol de sort : le joueur s'approprie un sort resté en jeu. */
+  stealLasting(pi: PlayerIndex, index: number): void {
+    const entry = this.lastingCards[index];
+    if (!entry || entry.owner === pi) return;
+    this.lastingCards[index] = { ...entry, owner: pi, triggered: false };
+    this.addLog(`${this.heroName(pi)} s'empare de ${getCard(entry.cardId).name}.`, 'info', pi);
+  }
+
+  /** Vol de sort : le dernier enchantement d'une créature passe sur une autre créature, lancé par ce joueur. */
+  stealEnchantment(pi: PlayerIndex, fromUid: number, toUid: number): void {
+    const from = this.locate(fromUid)?.unit;
+    const to = this.locate(toUid)?.unit;
+    const last = from?.enchantments.at(-1);
+    if (!from || !to || !last) return;
+    from.enchantments.pop();
+    this.removeEnchantmentEffects(from, last);
+    to.enchantments.push({ ...last, owner: pi, triggered: false });
+    to.hpMax += last.hp ?? 0;
+    to.hpCur += last.hp ?? 0;
+    this.addLog(`${getCard(last.cardId).name} enchante ${getCard(to.cardId).name}.`, 'info', pi);
+  }
+
+  /** Détruit tous les sorts permanents lancés par ce joueur (enchantements et sorts restés en jeu). */
+  dispelOwnedBy(owner: PlayerIndex): void {
+    for (const q of [0, 1] as const) {
+      for (const { unit } of this.units(q)) {
+        const mine = unit.enchantments.filter(e => e.owner === owner);
+        unit.enchantments = unit.enchantments.filter(e => e.owner !== owner);
+        for (const e of mine) {
+          this.bury(e.owner, [e.cardId]);
+          this.removeEnchantmentEffects(unit, e);
+        }
+      }
+    }
+    for (let i = this.lastingCards.length - 1; i >= 0; i--) {
+      const entry = this.lastingCards[i]!;
+      if (entry.owner === owner && getCard(entry.cardId).type === 'spell') this.destroyLasting(i);
+    }
+  }
+
+  /** Le joueur prend le contrôle de la créature, placée sur une case libre de son camp ; elle est comme nouvellement déployée. */
+  takeControl(uid: number, pi: PlayerIndex, slot: SlotRef): void {
+    const found = this.locate(uid);
+    if (!found || found.owner === pi || this.players[pi].board[slot.row]![slot.lane]) return;
+    this.players[found.owner].board[found.row]![found.lane] = null;
+    const { unit } = found;
+    unit.owner = pi;
+    unit.deployedTurn = this.turnCount;
+    unit.acted = false;
+    unit.attacked = false;
+    unit.attacks = 0;
+    unit.moved = false;
+    this.players[pi].board[slot.row]![slot.lane] = unit;
+    this.addLog(`${this.heroName(pi)} prend le contrôle de ${getCard(unit.cardId).name}.`, 'info', pi);
+    this.enterLane(unit, slot.lane);
+    this.onLeave(found);
+    this.settle();
+  }
+
+  /** Image fantôme : un jeton copie de la créature, avec Attaque rapide, détruit dès qu'il subit des dégâts. */
+  deployCopy(pi: PlayerIndex, sourceUid: number, slot: SlotRef): void {
+    const source = this.locate(sourceUid)?.unit;
+    if (!source) return;
+    const unit = this.deployToken(pi, source.cardId, slot);
+    if (unit) unit.keywords = { ...unit.keywords, quickAttack: true, fragile: true };
+  }
+
+  /** Déploie gratuitement une créature de la main, sans effet à l'arrivée (Renforts). */
+  deployFromHand(pi: PlayerIndex, cardId: string, slot: SlotRef): void {
+    const p = this.players[pi];
+    const index = p.hand.indexOf(cardId);
+    const card = getCard(cardId);
+    if (index === -1 || card.type !== 'creature') return;
+    p.hand.splice(index, 1);
+    p.deployedThisTurn++;
+    this.deploy(pi, card, slot);
+    this.addLog(`${card.name} est déployé gratuitement.`, 'info', pi);
+    this.settle();
+  }
+
+  /** Les créatures mises au cimetière depuis la fin du dernier tour du joueur reviennent dans sa main. */
+  returnRecentDead(pi: PlayerIndex): void {
+    const p = this.players[pi];
+    for (const cardId of [...p.recentDead]) if (p.grave.includes(cardId)) this.returnFromGrave(pi, cardId);
+  }
+
+  /** La carte retourne dans la main, et ne coûte rien ce tour-ci. */
+  makeFree(pi: PlayerIndex, cardId: string): void {
+    this.addToHand(pi, cardId);
+    this.players[pi].freeCard = cardId;
+  }
+
+  /** Le joueur jouera un tour supplémentaire après celui-ci, sans production de ressources. */
+  grantExtraTurn(pi: PlayerIndex): void {
+    this.players[pi].extraTurns++;
+  }
+
+  /** Le joueur ne peut plus jouer de carte ce tour-ci. */
+  lockPlays(pi: PlayerIndex): void {
+    this.players[pi].playLocked = true;
+  }
+
+  /** Semaine des mercenaires : jusqu'à la fin du tour, le dessus de la bibliothèque du joueur est révélé et donne ses bonus. */
+  startMercenaryWeek(pi: PlayerIndex): void {
+    this.mercenaryWeek = pi;
+    const top = this.players[pi].deck.at(-1);
+    if (top !== undefined) this.addLog(`Dessus de la bibliothèque révélé : ${getCard(top).name}.`, 'info', pi);
+  }
+
+  /** Les créatures magiques gagnent +1 en attaque jusqu'à la fin du tour, ou jusqu'au prochain tour du joueur indiqué. */
+  boostMagicCreatures(until: PlayerIndex | null): void {
+    this.spiritBoosts.push(until);
+  }
+
+  /** Toutes les créatures gagnent +N en attaque et en riposte jusqu'à la fin du tour. */
+  boostAllThisTurn(n: number): void {
+    this.danceBoost += n;
+  }
+
   deployFromGrave(pi: PlayerIndex, cardId: string, slot: SlotRef): void {
     const p = this.players[pi];
     const index = p.grave.lastIndexOf(cardId);
@@ -1795,16 +2234,19 @@ export class Game {
   //  Déroulement interne
   // ==================================================================
   private createPlayer(setup: PlayerSetup): PlayerState {
-    const { faction, hero, cards } = DECKS[setup.deck];
+    const { hero: heroId, cards, events } = setup.deck;
+    const hero = getHero(heroId);
+    const { faction } = hero;
     const deck = Object.entries(cards).flatMap(([id, count]) => Array<string>(count).fill(id));
     return {
-      id: setup.id, isAi: setup.isAi, deckId: setup.deck, faction, accountId: setup.accountId, name: setup.name,
+      id: setup.id, isAi: setup.isAi, heroId, events: [...events], faction, accountId: setup.accountId, name: setup.name,
       hp: hero.hp, maxHp: hero.hp, m: hero.m, g: hero.g, d: hero.d, res: 0, maxRes: 0,
       deck: this.rng.shuffle(deck), hand: [], grave: [],
       board: Array.from({ length: ROWS }, () => Array<Unit | null>(LANES).fill(null)),
       heroActionUsed: false, meleeDeployBonus: 0, nextDeployBonus: { ...NO_DEPLOY_BONUS },
       seesOpponentHand: false, blackmailUsed: false, discardedThisTurn: false, deployedThisTurn: 0, cardsPlayedThisTurn: 0,
       recentDead: [], freeCard: null, left: false,
+      playLocked: false, typesPlayedThisTurn: [], playedThisTurn: [], extraTurns: 0, borrowed: null, knightGrowthUsed: false,
     };
   }
 
@@ -1812,24 +2254,33 @@ export class Game {
     const first: PlayerIndex = this.rng.next() < 0.5 ? 0 : 1;
     this.currentPlayer = first;
     this.supplyPhase = true;
-    this.draw(first, STARTING_HAND, true);
-    this.draw(other(first), STARTING_HAND, true);
+    this.draw(first, STARTING_HAND);
+    this.draw(other(first), STARTING_HAND);
     this.supplyPhase = false;
     this.dealEvents();
-    this.addLog(`${this.heroName(first)} commence la partie.`, 'turn', null);
-    this.beginTurn();
+    // L'IA garde toujours sa main de départ
+    this.mulliganDone = [this.players[0].isAi, this.players[1].isAi];
+    if (this.mulliganDone.every(Boolean)) this.beginGame();
     return this;
+  }
+
+  /** Fin du mulligan : le premier joueur commence son tour. */
+  private beginGame(): void {
+    this.addLog(`${this.heroName(this.currentPlayer)} commence la partie.`, 'turn', null);
+    this.beginTurn();
   }
 
   /**
    * Phase de ravitaillement : fin des effets « jusqu'à votre prochain tour », +1 production, ressources rechargées
    * (réduites de moitié par Pillage), Combustion, poison, Régénération et Soin, pioche ; puis phase d'action.
    */
-  private beginTurn(): void {
+  private beginTurn(extraTurn = false): void {
     const pi = this.currentPlayer;
     const p = this.players[pi];
     this.turnCount++;
     this.expireLasting(pi, 'nextTurn');
+    this.expireEnchantments(pi);
+    this.spiritBoosts = this.spiritBoosts.filter(until => until !== pi);
     for (const entry of this.lastingCards) if (entry.owner === pi) entry.active = false;
     for (const q of [0, 1] as const) {
       this.players[q].discardedThisTurn = false;
@@ -1839,14 +2290,22 @@ export class Game {
         if (unit.untargetableUntil === pi) unit.untargetableUntil = null;
       }
     }
-    p.maxRes = Math.min(MAX_RESOURCES, p.maxRes + 1);
-    p.res = this.lastingCards.some(e => rulesOf(e).halvesSupply?.(this, pi, e)) ? Math.floor(p.maxRes / 2) : p.maxRes;
+    if (!extraTurn) {
+      p.maxRes = Math.min(MAX_RESOURCES, p.maxRes + 1);
+      const income = this.units(pi).reduce((sum, x) => sum + (x.unit.keywords.income ?? 0), 0);
+      const supply = this.lastingCards.some(e => rulesOf(e).halvesSupply?.(this, pi, e)) ? Math.floor(p.maxRes / 2) : p.maxRes + income;
+      p.res = this.lastingCards.some(e => e.owner !== pi && rulesOf(e).blocksSupply) ? 0 : supply;
+    }
     p.heroActionUsed = false;
     p.meleeDeployBonus = 0;
     p.nextDeployBonus = { ...NO_DEPLOY_BONUS };
     p.blackmailUsed = false;
     p.deployedThisTurn = 0;
     p.cardsPlayedThisTurn = 0;
+    p.playLocked = false;
+    p.typesPlayedThisTurn = [];
+    p.playedThisTurn = [];
+    p.knightGrowthUsed = false;
     this.deathsThisTurn = 0;
     this.eventsUsed = this.eventRow.map(() => false);
     this.addLog(`— Tour de ${this.heroName(pi)} —`, 'turn', null);
@@ -1859,6 +2318,15 @@ export class Game {
         if (burning) this.damageUnit(unit.uid, burning, FIRE);
       }
     }
+    this.eachTurnEnchantments();
+    for (const entry of [...this.lastingCards]) {
+      const scorch = rulesOf(entry).scorchesEachTurn;
+      if (scorch) [...this.units(0), ...this.units(1)].forEach(x => this.damageUnit(x.unit.uid, scorch, { ...FIRE, owner: entry.owner }));
+    }
+    for (const { unit } of this.units(pi)) {
+      const chill = this.keywordsOf(unit).chill;
+      if (chill) this.damageUnit(unit.uid, chill, ICE);
+    }
     for (const { unit } of this.units(pi)) {
       unit.acted = false;
       unit.attacked = false;
@@ -1870,7 +2338,8 @@ export class Game {
       }
     }
     for (const { unit } of this.units(pi)) {
-      if (unit.keywords.regen) this.healUnit(unit.uid, unit.keywords.regen);
+      const regen = this.keywordsOf(unit).regen;
+      if (regen) this.healUnit(unit.uid, regen);
     }
     for (const { unit } of this.units(pi)) {
       const heal = unit.keywords.heal;
@@ -1891,15 +2360,69 @@ export class Game {
     this.berserkAttacks(pi);
   }
 
+  /** Les enchantements « jusqu'à votre prochain tour » de ce joueur prennent fin (Feu intérieur). */
+  private expireEnchantments(pi: PlayerIndex): void {
+    for (const q of [0, 1] as const) {
+      for (const { unit } of this.units(q)) {
+        const expired = unit.enchantments.filter(e => e.until === pi);
+        if (!expired.length) continue;
+        unit.enchantments = unit.enchantments.filter(e => e.until !== pi);
+        for (const e of expired) {
+          this.bury(e.owner, [e.cardId]);
+          this.removeEnchantmentEffects(unit, e);
+        }
+      }
+    }
+  }
+
+  /** Blizzard, Contagion : au début de chaque tour, la créature enchantée est frappée, puis le sort passe à une voisine. */
+  private eachTurnEnchantments(): void {
+    const moves: { from: Unit; enchantment: Enchantment }[] = [];
+    for (const q of [0, 1] as const) {
+      for (const { unit } of this.units(q)) {
+        for (const e of unit.enchantments) {
+          const card = getCard(e.cardId);
+          if (card.type !== 'creature' && card.eachTurn) moves.push({ from: unit, enchantment: e });
+        }
+      }
+    }
+    for (const { from, enchantment } of moves) {
+      const card = getCard(enchantment.cardId);
+      if (card.type === 'creature' || !card.eachTurn) continue;
+      const { damage, poison, spreads } = card.eachTurn;
+      if (poison && this.locate(from.uid)) this.addCounters(from, 'poison', poison);
+      if (damage && this.locate(from.uid)) {
+        this.damageUnit(from.uid, damage, { magic: true, school: card.school, spell: true, owner: enchantment.owner });
+      }
+      if (!spreads) continue;
+      const holder = [...this.units(0), ...this.units(1)].find(x => x.unit.enchantments.includes(enchantment));
+      if (!holder) continue;
+      const neighbours = this.adjacentUnits(holder.unit.uid).filter(u => !u.enchantments.some(e => e.cardId === enchantment.cardId));
+      if (!neighbours.length) continue;
+      const next = neighbours[Math.floor(this.rng.next() * neighbours.length)]!;
+      holder.unit.enchantments.splice(holder.unit.enchantments.indexOf(enchantment), 1);
+      next.enchantments.push(enchantment);
+      this.addLog(`${card.name} passe sur ${getCard(next.cardId).name}.`, 'info', enchantment.owner);
+    }
+  }
+
   /**
    * Début du tour du joueur : soins de son héros (Prêtre de bataille), Chaînes maudites, Mort silencieuse,
    * Lumière de demain.
    */
   private startOfTurnTriggers(pi: PlayerIndex): void {
+    for (let i = this.lastingCards.length - 1; i >= 0; i--) {
+      const entry = this.lastingCards[i]!;
+      if (entry.owner !== pi || !rulesOf(entry).doomBell) continue;
+      this.addLog('Le glas sonne : toutes les créatures sont détruites.', 'damage', pi);
+      this.destroyLasting(i);
+      [...this.units(0), ...this.units(1)].forEach(x => this.destroyUnit(x.unit.uid));
+    }
     for (const { unit } of this.units(pi)) {
       const k = this.keywordsOf(unit);
       if (k.heroRegen) this.healHero(pi, k.heroRegen);
       if (k.chains) this.damageHero(pi, k.chains);
+      if (k.massHeal) this.healAll(pi);
     }
     for (const q of [0, 1] as const) {
       for (const { unit } of this.units(q)) {
@@ -1928,7 +2451,7 @@ export class Game {
 
   /** Les événements des deux joueurs sont mélangés ensemble et les deux premiers sont mis en jeu. */
   private dealEvents(): void {
-    const all = this.players.flatMap(p => DECKS[p.deckId].events);
+    const all = this.players.flatMap(p => p.events);
     this.eventDeck = this.rng.shuffle([...all]);
     while (this.eventRow.length < EVENT_SLOTS) this.eventRow.push(this.drawEvent());
   }
@@ -1952,6 +2475,10 @@ export class Game {
     const arriving = this.drawEvent();
     this.eventRow.push(arriving);
     this.addLog(`Nouvel événement : ${getEvent(arriving).name}.`, 'info', null);
+  }
+
+  private ongoingEvents(): OngoingEvent[] {
+    return this.eventRow.map(getEvent).filter((e): e is OngoingEvent => e.kind === 'ongoing');
   }
 
   private activeEventAt(slot: number): ActiveEvent | null {
@@ -1979,7 +2506,9 @@ export class Game {
     if (card.keywords.bloodPact) return [deploy, BLOOD_PACT_FIRST, BLOOD_PACT_SECOND];
     const arrival = card.arrival?.steps ?? [];
     if (arrival.length && arrival.every(s => s.options(this, pi, { handIndex: null }).length)) return [deploy, ...arrival];
-    return card.keywords.outmanoeuvre && this.units(other(pi)).length ? [deploy, RELOCATE_TARGET, RELOCATE_DESTINATION] : [deploy];
+    // Déjouer est facultatif : sans créature ennemie déplaçable (intouchable, ancrée), la créature se déploie simplement
+    const movable = card.keywords.outmanoeuvre && RELOCATE_TARGET.options(this, pi, { handIndex: null }).length > 0;
+    return movable ? [deploy, RELOCATE_TARGET, RELOCATE_DESTINATION] : [deploy];
   }
 
   private deployStep(card: CreatureCard): Step {
@@ -2012,6 +2541,7 @@ export class Game {
       return existing;
     }
     const unit = this.makeUnit(card, pi);
+    if (this.ongoingEvents().some(e => e.protectsArrivals)) unit.untargetableUntil = pi;
     unit.atk += next.atk;
     unit.ret += next.ret;
     unit.hpMax += bonus;
@@ -2044,7 +2574,8 @@ export class Game {
       .filter(x => x.unit === found.unit || adjacent(x, found))
       .reduce((sum, x) => sum + (x.unit.keywords[key] ?? 0), 0);
     const armor = perfect ? 0 : this.keywordsOf(found.unit).armor ?? 0;
-    const source = perfect ? { ...this.unitSource(from), unpreventable: true } : this.unitSource(from);
+    const combat = { ...this.unitSource(from), combat: from.attackType };
+    const source = perfect ? { ...combat, unpreventable: true } : combat;
     const result = this.inflict(toUid, Math.max(0, amount - guard - armor), source);
     if (result.dealt > 0 && from.keywords.deathTouch && this.locate(toUid)) this.destroyUnit(toUid);
     return result;
@@ -2066,9 +2597,13 @@ export class Game {
     const k = this.keywordsOf(unit);
     const found = this.locate(uid)!;
     const school = source.school;
+    const owner = source.owner ?? this.resolving?.player;
     let halvings = 0;
     if (!source.unpreventable) {
       if (this.isShielded(unit) || (school === 'Ténèbres' && k.darkWard) || (source.magic && k.magicShield)) return NO_DAMAGE;
+      if (this.preventedByArmour(found.owner) || (owner !== undefined && owner !== found.owner && this.preventedByMartyr(found.owner))) {
+        return NO_DAMAGE;
+      }
       const shell = unit.enchantments.findIndex(e => e.keywords.shell);
       if (shell !== -1) {
         const [broken] = unit.enchantments.splice(shell, 1);
@@ -2082,9 +2617,12 @@ export class Game {
         k.spellResist && source.spell,
         !!source.spell && !!school && this.lastingCards.some(e => rulesOf(e).halvesSpellDamage?.(school)),
         found.row === 0 && this.lastingCards.some(e => rulesOf(e).halvesFrontDamage && e.owner === unit.owner),
+        k.stoneSkin && !!source.combat,
+        k.windShield && source.combat === 'shooter',
       ].filter(Boolean).length;
     }
-    const amount = Math.floor(n / 2 ** halvings);
+    const doubled = source.spell && this.lastingCards.some(e => rulesOf(e).doublesSpellDamage) ? 2 : 1;
+    const amount = Math.floor((n * doubled) / 2 ** halvings);
     if (amount <= 0) return NO_DAMAGE;
     if ((school === 'Feu' && k.fireHeal) || (school === 'Terre' && k.earthHeal)) {
       this.healUnit(uid, amount);
@@ -2093,14 +2631,32 @@ export class Game {
     const dealt = Math.min(amount, unit.hpCur);
     unit.hpCur -= amount;
     this.pendingEvents.push({ kind: 'damage', target: { kind: 'unit', uid }, amount });
-    if (unit.hpCur <= 0) this.destroyUnit(uid);
+    if (unit.hpCur <= 0 || k.fragile || (k.deathSeal && source.combat)) this.destroyUnit(uid);
     return { dealt, excess: amount - dealt };
+  }
+
+  /** Armure céleste : les dégâts aux créatures du joueur sont empêchés, et la carte a servi ce tour-ci. */
+  private preventedByArmour(pi: PlayerIndex): boolean {
+    const armour = this.lastingCards.find(e => e.owner === pi && rulesOf(e).preventsDamage === 'all');
+    if (armour) armour.triggered = true;
+    return !!armour;
+  }
+
+  /** Martyr : les dégâts infligés par l'adversaire aux créatures du joueur sont empêchés, et l'enchantement a servi. */
+  private preventedByMartyr(pi: PlayerIndex): boolean {
+    for (const { unit } of this.units(pi)) {
+      const martyr = unit.enchantments.find(e => e.owner === pi && cardIsMartyr(e.cardId));
+      if (!martyr) continue;
+      martyr.triggered = true;
+      return true;
+    }
+    return false;
   }
 
   /** Dégâts infligés par une créature : magiques ou non, et de l'école de magie de sa carte. */
   private unitSource(unit: Unit): DamageSource {
     const school = schoolOf(unit);
-    return school ? { magic: unit.magic, school } : { magic: unit.magic };
+    return school ? { magic: unit.magic, school, owner: unit.owner } : { magic: unit.magic, owner: unit.owner };
   }
 
   private unitKeywords(uid: number): Keywords {
@@ -2119,7 +2675,20 @@ export class Game {
       return sum + ((stat === 'atk' ? rules.attackBonus : rules.retaliationBonus)?.(this, unit, entry) ?? 0);
     }, 0);
     const temporary = stat === 'atk' ? unit.tempAttack : 0;
-    return enchantments - unit.cripple + unit.enrage + temporary + this.packBonus(unit) + honor + enemies + spells + lasting;
+    return enchantments + this.turnBoost(unit, stat) - unit.cripple + unit.enrage + temporary + this.packBonus(unit) + honor + enemies + spells + lasting;
+  }
+
+  /** Bonus du tour donnés par les événements : Mois des flammes dansantes, Semaine des mercenaires. */
+  private turnBoost(unit: Unit, stat: 'atk' | 'ret'): number {
+    let boost = this.danceBoost + (stat === 'atk' && unit.magic ? this.spiritBoosts.length : 0);
+    const q = this.mercenaryWeek;
+    if (q !== null) {
+      const top = this.players[q].deck.at(-1);
+      const creatureOnTop = top !== undefined && getCard(top).type === 'creature';
+      if (creatureOnTop && stat === 'atk' && unit.owner === q) boost++;
+      if (!creatureOnTop && stat === 'ret' && unit.owner !== q) boost++;
+    }
+    return boost;
   }
 
   /** Sorts permanents en jeu : enchantements des créatures et sorts restés en jeu. */
@@ -2138,17 +2707,55 @@ export class Game {
     }
   }
 
-  /** Bulbe vénéneux : une créature de mêlée ou volante de son couloir qui attaque est empoisonnée, et le bulbe détruit. */
-  private poisonousBulbs(attacker: Unit): void {
+  /**
+   * Pièges de couloir : une créature de mêlée ou volante qui y attaque est empoisonnée (Bulbe vénéneux) ou brûlée
+   * (Piège de feu), et le piège est détruit.
+   */
+  private trapAttacker(attacker: Unit): void {
     const found = this.locate(attacker.uid);
     if (!found || attacker.attackType === 'shooter') return;
     for (let i = this.lastingCards.length - 1; i >= 0; i--) {
       const entry = this.lastingCards[i]!;
-      const poison = rulesOf(entry).poisonsAttackers;
-      if (!poison || entry.lane !== found.lane) continue;
-      this.addCounters(attacker, 'poison', poison);
+      const { poisonsAttackers: poison, burnsAttackers: burn } = rulesOf(entry);
+      if ((!poison && !burn) || entry.lane !== found.lane) continue;
+      if (poison) this.addCounters(attacker, 'poison', poison);
       this.destroyLasting(i);
+      if (burn) this.damageUnit(attacker.uid, burn, { ...FIRE, owner: entry.owner });
     }
+  }
+
+  /** Mur de pierre : une créature de mêlée qui attaque dans son couloir n'inflige ni ne subit de dégâts ; le mur est détruit. */
+  private meleeWall(attacker: Unit): boolean {
+    const found = this.locate(attacker.uid);
+    if (!found || attacker.attackType !== 'melee') return false;
+    const i = this.lastingCards.findIndex(e => rulesOf(e).blocksMeleeAttack && e.lane === found.lane);
+    if (i === -1) return false;
+    this.destroyLasting(i);
+    return true;
+  }
+
+  /** Agonie : la créature subit des dégâts après s'être déplacée ou avoir attaqué. */
+  private sufferAgony(unit: Unit): void {
+    const agony = this.locate(unit.uid) ? this.keywordsOf(unit).agony : undefined;
+    if (agony) this.damageUnit(unit.uid, agony, { magic: true, school: 'Ténèbres', spell: true });
+  }
+
+  /** Croisé solaire : la première fois du tour qu'un chevalier allié détruit une créature, toutes les piles alliées grandissent de 1 (par croisé). */
+  private knightGrowth(pi: PlayerIndex): void {
+    const p = this.players[pi];
+    const crusaders = this.units(pi).filter(x => x.unit.keywords.knightGrowth).length;
+    if (!crusaders || p.knightGrowthUsed || this.currentPlayer !== pi) return;
+    p.knightGrowthUsed = true;
+    for (const { unit } of this.units(pi)) {
+      const card = getCreature(unit.cardId);
+      unit.stack += crusaders;
+      unit.atk += card.atk * crusaders;
+      unit.ret += card.ret * crusaders;
+      unit.hpMax += card.hp * crusaders;
+      unit.hpCur += card.hp * crusaders;
+      this.pendingEvents.push({ kind: 'buff', target: { kind: 'unit', uid: unit.uid } });
+    }
+    this.addLog('Les piles alliées grandissent.', 'info', pi);
   }
 
   /** Shinobi maître chanteur : la première fois du tour, la production du joueur augmente de 1. */
@@ -2187,7 +2794,9 @@ export class Game {
   private checkLasting(): void {
     for (let i = this.lastingCards.length - 1; i >= 0; i--) {
       const entry = this.lastingCards[i]!;
-      if (rulesOf(entry).needsCreatures && !this.units(entry.owner).length) this.destroyLasting(i);
+      const rules = rulesOf(entry);
+      if (rules.needsCreatures && !this.units(entry.owner).length) this.destroyLasting(i);
+      else if (rules.needsAnyCreature && !this.units(0).length && !this.units(1).length) this.destroyLasting(i);
     }
   }
 
@@ -2239,6 +2848,11 @@ export class Game {
     }
     const draws = this.units(owner).filter(x => x.unit.keywords.deathDraw).length + (k.deathDraw ? 1 : 0);
     if (draws > 0) this.draw(owner, draws);
+    this.spawnBreeder(dead);
+    if (k.doomsday) {
+      this.addLog(`${getCard(unit.cardId).name} entraîne toutes les créatures dans sa chute.`, 'damage', owner);
+      [...this.units(0), ...this.units(1)].forEach(x => this.destroyUnit(x.unit.uid));
+    }
     const burst = k.fireBurst;
     if (!burst) return;
     this.addLog(`${getCard(unit.cardId).name} explose (${burst}).`, 'damage', owner);
@@ -2246,6 +2860,23 @@ export class Game {
     [...this.units(owner), ...this.units(other(owner))]
       .filter(x => x.lane === dead.lane)
       .forEach(x => this.damageUnit(x.unit.uid, burst, source));
+  }
+
+  /** Mère couveuse : une couveuse alliée (non jeton) qui meurt laisse une larve 1/0/1 à sa place. */
+  private spawnBreeder({ unit, owner, row, lane }: PlacedUnit): void {
+    if (unit.token || getCreature(unit.cardId).tribe !== 'breeder') return;
+    if (!this.units(owner).some(x => x.unit.keywords.breederSpawn) || this.players[owner].board[row]![lane]) return;
+    this.deployToken(owner, row === 0 ? 'larveCouveuseMelee' : 'larveCouveuseTireur', { row, lane });
+  }
+
+  /** Déploie un jeton (il ne va ni au cimetière ni en main quand il quitte le jeu). */
+  deployToken(pi: PlayerIndex, cardId: string, slot: SlotRef): Unit | null {
+    const card = getCard(cardId);
+    if (card.type !== 'creature' || this.players[pi].board[slot.row]![slot.lane]) return null;
+    const unit = this.deploy(pi, card, slot);
+    unit.token = true;
+    this.addLog(`${card.name} apparaît.`, 'info', pi);
+    return unit;
   }
 
   /** Met des cartes au cimetière de leur propriétaire ; celles qui se recyclent sont remélangées dans sa bibliothèque. */
@@ -2281,14 +2912,9 @@ export class Game {
     }
   }
 
-  private addToHand(pi: PlayerIndex, cardId: string, silent = false): void {
-    const p = this.players[pi];
-    if (p.hand.length >= MAX_HAND) {
-      if (!silent) this.addLog(`Main pleine : ${getCard(cardId).name} est défaussée.`, 'info', pi);
-      this.bury(pi, [cardId]);
-      return;
-    }
-    p.hand.push(cardId);
+  /** Ajoute une carte à la main : sa taille n'est pas limitée. */
+  private addToHand(pi: PlayerIndex, cardId: string): void {
+    this.players[pi].hand.push(cardId);
   }
 
   /** Retire de la main les cartes aux positions données ; retourne leurs identifiants dans le même ordre. */
@@ -2351,6 +2977,7 @@ export class Game {
 
   private turnError(pi: PlayerIndex): string | null {
     if (this.isOver) return 'La partie est terminée.';
+    if (this.currentPhase === 'mulligan') return 'La partie n\'a pas commencé : gardez ou changez d\'abord votre main.';
     if (this.currentPlayer !== pi) return 'Ce n\'est pas votre tour.';
     if (this.pendingPlay) return PENDING_ERRORS[this.pendingPlay.kind];
     if (this.pendingRetaliation) return 'Une riposte est en cours.';
@@ -2367,7 +2994,7 @@ export class Game {
       uid: ++this.lastUid, cardId: card.id, owner, attackType: card.attackType, magic: card.magic,
       keywords: { ...card.keywords }, deployedTurn: this.turnCount,
       atk: card.atk, ret: card.ret, hpCur: card.hp, hpMax: card.hp,
-      stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0,
+      token: false, stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0,
       tempKeywords: {}, doomed: null, untargetableUntil: null, enchantments: [], acted: false, attacked: false, attacks: 0, moved: false,
     };
   }
@@ -2405,6 +3032,11 @@ const rulesOf = (entry: LastingCard): LastingRules => {
 };
 
 const NO_RULES: LastingRules = { duration: 'permanent' };
+
+const cardIsMartyr = (cardId: string): boolean => {
+  const card = getCard(cardId);
+  return card.type !== 'creature' && !!card.martyr;
+};
 
 const cardKillsAndReturns = (cardId: string): boolean => {
   const card = getCard(cardId);

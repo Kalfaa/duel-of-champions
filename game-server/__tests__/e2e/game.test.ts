@@ -52,6 +52,12 @@ class TestClient {
     });
   }
 
+  /** Attend le début de la partie, puis garde la main de départ. */
+  async keepHand(): Promise<void> {
+    await this.waitFor(c => !!c.state?.canMulligan);
+    this.send({ type: 'action', action: { type: 'mulligan', redraw: false } });
+  }
+
   /** Attend que ce soit à ce joueur d'agir. */
   waitForTurn(): Promise<void> {
     return this.waitFor(c => {
@@ -125,6 +131,7 @@ describe('parties via WebSocket', () => {
   it('joue plusieurs tours contre l\'IA', async () => {
     const player = await connect();
     player.send({ type: 'startAi', deck: 'siegfried' });
+    await player.keepHand();
     await player.waitForTurn();
 
     for (let i = 0; i < 5; i++) {
@@ -161,6 +168,7 @@ describe('parties via WebSocket', () => {
   it('renvoie une erreur pour une action illégale', async () => {
     const player = await connect();
     player.send({ type: 'startAi', deck: 'kalAzaar' });
+    await player.keepHand();
     await player.waitForTurn();
     player.send({ type: 'action', action: { type: 'develop', choice: 'm' } });
     player.send({ type: 'action', action: { type: 'develop', choice: 'g' } });
@@ -180,6 +188,9 @@ describe('parties via WebSocket', () => {
     expect(alice.state!.you).toBe(0);
     expect(bob.state!.you).toBe(1);
     expect(alice.state!.players.map(p => p.name)).toEqual(['Alice', 'Bob']);
+    expect(alice.state!.phase).toBe('mulligan');
+    await alice.keepHand();
+    await bob.keepHand();
 
     // Le premier joueur termine son tour : la main passe à l'autre
     const [first, second] = alice.state!.current === 0 ? [alice, bob] : [bob, alice];

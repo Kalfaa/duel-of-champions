@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { AiStrategy } from '../../../src/model/ai-player';
+import { presetDeckList } from '../../../src/model/deck-list';
 import { GameRuleError } from '../../../src/model/errors';
 import type { Game, PlayerState } from '../../../src/model/game';
 import type { IMatchmakingQueue } from '../../../src/model/matchmaking-queue';
 import type { IAccountClient } from '../../../src/integration/account-client';
 import type { IGameRepository } from '../../../src/repository/game-repository';
+import type { IDeckService } from '../../../src/service/deck-service';
 import { AlreadyInGameError, NotInGameError, UnknownPlayerError } from '../../../src/service/errors';
 import { GameService } from '../../../src/service/game-service';
 import type { GameNotification, IPlayerChannel, PlayerIdentity } from '../../../src/service/ports';
@@ -46,6 +48,7 @@ describe('GameService', () => {
   let wait: Mock<(ms: number) => Promise<void>>;
   let idCounter: number;
   let accounts: { reportMatch: Mock<IAccountClient['reportMatch']> };
+  let decks: { playable: Mock<IDeckService['playable']> };
 
   beforeEach(() => {
     repository = mockRepository();
@@ -55,6 +58,7 @@ describe('GameService', () => {
     idCounter = 0;
     wait = vi.fn(async () => {});
     accounts = { reportMatch: vi.fn(async () => {}) };
+    decks = { playable: vi.fn(async () => presetDeckList('ishuma')) };
     service = new GameService(
       repository.repo,
       queue as unknown as IMatchmakingQueue,
@@ -63,9 +67,16 @@ describe('GameService', () => {
       { next: () => `id${++idCounter}` },
       { next: () => 42 },
       accounts,
+      decks as unknown as IDeckService,
       { aiAction: 5, turnStart: 1600, cardReveal: 1000, retaliation: 500 },
     );
   });
+
+  /** Lance une partie contre l'IA et garde la main de départ. */
+  const startAi = async (playerId: string) => {
+    await service.startAiGame(playerId, { preset: 'siegfried' });
+    await service.act(playerId, { type: 'mulligan', redraw: false });
+  };
 
   it('liste un deck jouable par faction, avec son héros', () => {
     expect(service.listDecks().map(d => [d.id, d.faction])).toEqual([
@@ -75,14 +86,30 @@ describe('GameService', () => {
 
   it('refuse un deck qui n\'est pas proposé', async () => {
     const playerId = service.connect(mockChannel().channel, ALICE);
-    await expect(service.startAiGame(playerId, 'takana')).rejects.toThrow('Ce deck n\'est pas disponible.');
-    await expect(service.findMatch(playerId, 'yukiko')).rejects.toThrow('Ce deck n\'est pas disponible.');
+    await expect(service.startAiGame(playerId, { preset: 'takana' })).rejects.toThrow('Ce deck n\'est pas disponible.');
+    await expect(service.findMatch(playerId, { preset: 'yukiko' })).rejects.toThrow('Ce deck n\'est pas disponible.');
+  });
+
+  it('joue un deck du joueur, même avec un héros dont le deck prédéfini n\'est pas proposé', async () => {
+    const player = mockChannel();
+    const playerId = service.connect(player.channel, ALICE);
+    await service.startAiGame(playerId, { custom: 'deck-1' });
+    expect(decks.playable).toHaveBeenCalledWith('acc-alice', 'deck-1');
+    const view = player.lastState();
+    expect(view.players[view.you].hero.name).toBe('Ishuma, seigneur des dragons');
+  });
+
+  it('refuse un deck du joueur qui n\'est pas jouable', async () => {
+    decks.playable.mockRejectedValueOnce(new GameRuleError('Le deck « Test » n\'est pas jouable.'));
+    const playerId = service.connect(mockChannel().channel, ALICE);
+    await expect(service.findMatch(playerId, { custom: 'deck-1' })).rejects.toThrow('n\'est pas jouable');
+    expect(queue.join).not.toHaveBeenCalled();
   });
 
   it('démarre une partie contre l\'IA, la sauvegarde et envoie l\'état au joueur', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
 
     expect(repository.repo.save).toHaveBeenCalled();
     const view = player.lastState();
@@ -95,7 +122,7 @@ describe('GameService', () => {
   it('fait jouer l\'IA après la fin du tour du joueur', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     const turn = player.lastState().turn;
 
     await service.act(playerId, { type: 'develop', choice: 'm' });
@@ -114,7 +141,7 @@ describe('GameService', () => {
   it('affiche une carte jouée avant de la résoudre', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     const you = player.lastState().you;
     const game = repository.games.values().next().value!;
     const p = game.player(you) as PlayerState;
@@ -139,7 +166,7 @@ describe('GameService', () => {
   it('diffuse l\'attaque, puis la riposte du défenseur après une pause', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     const game = repository.games.values().next().value!;
     const you = player.lastState().you;
     const attacker = place(game, you, 'gouleMiserable', 0, 0);
@@ -158,8 +185,8 @@ describe('GameService', () => {
 
   it('refuse de démarrer une seconde partie en cours', async () => {
     const playerId = service.connect(mockChannel().channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
-    await expect(service.startAiGame(playerId, 'kalAzaar')).rejects.toThrow(AlreadyInGameError);
+    await startAi(playerId);
+    await expect(service.startAiGame(playerId, { preset: 'kalAzaar' })).rejects.toThrow(AlreadyInGameError);
   });
 
   it('refuse une action hors partie', async () => {
@@ -170,7 +197,7 @@ describe('GameService', () => {
   it('propage les erreurs de règle', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     await service.act(playerId, { type: 'develop', choice: 'm' });
     await expect(service.act(playerId, { type: 'develop', choice: 'g' })).rejects.toThrow(GameRuleError);
   });
@@ -178,8 +205,8 @@ describe('GameService', () => {
   it('met le joueur en attente quand personne ne cherche d\'adversaire', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.findMatch(playerId, 'siegfried');
-    expect(queue.join).toHaveBeenCalledWith({ playerId, accountId: 'acc-alice', name: 'Alice', deck: 'siegfried' });
+    await service.findMatch(playerId, { preset: 'siegfried' });
+    expect(queue.join).toHaveBeenCalledWith({ playerId, accountId: 'acc-alice', name: 'Alice', deck: presetDeckList('siegfried') });
     expect(player.received).toEqual([{ type: 'waiting' }]);
   });
 
@@ -188,9 +215,9 @@ describe('GameService', () => {
     const bob = mockChannel();
     const aliceId = service.connect(alice.channel, ALICE);
     const bobId = service.connect(bob.channel, BOB);
-    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: 'siegfried' }, { playerId: bobId, ...BOB, deck: 'kalAzaar' }]);
+    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: presetDeckList('siegfried') }, { playerId: bobId, ...BOB, deck: presetDeckList('kalAzaar') }]);
 
-    await service.findMatch(bobId, 'kalAzaar');
+    await service.findMatch(bobId, { preset: 'kalAzaar' });
 
     expect(alice.lastState().you).toBe(0);
     expect(bob.lastState().you).toBe(1);
@@ -199,7 +226,7 @@ describe('GameService', () => {
 
   it('un joueur qui quitte une partie contre l\'IA l\'abandonne et la partie est supprimée', async () => {
     const playerId = service.connect(mockChannel().channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     await service.leave(playerId);
     expect(queue.leave).toHaveBeenCalledWith(playerId);
     expect(repository.repo.delete).toHaveBeenCalled();
@@ -211,8 +238,8 @@ describe('GameService', () => {
     const bob = mockChannel();
     const aliceId = service.connect(alice.channel, ALICE);
     const bobId = service.connect(bob.channel, BOB);
-    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: 'siegfried' }, { playerId: bobId, ...BOB, deck: 'kalAzaar' }]);
-    await service.findMatch(bobId, 'kalAzaar');
+    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: presetDeckList('siegfried') }, { playerId: bobId, ...BOB, deck: presetDeckList('kalAzaar') }]);
+    await service.findMatch(bobId, { preset: 'kalAzaar' });
 
     await service.disconnect(aliceId);
 
@@ -225,30 +252,30 @@ describe('GameService', () => {
     const bob = mockChannel();
     const aliceId = service.connect(alice.channel, ALICE);
     const bobId = service.connect(bob.channel, BOB);
-    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: 'siegfried' }, { playerId: bobId, ...BOB, deck: 'kalAzaar' }]);
-    await service.findMatch(bobId, 'kalAzaar');
+    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: presetDeckList('siegfried') }, { playerId: bobId, ...BOB, deck: presetDeckList('kalAzaar') }]);
+    await service.findMatch(bobId, { preset: 'kalAzaar' });
     await service.leave(aliceId);
 
-    await service.startAiGame(bobId, 'namtaru');
+    await service.startAiGame(bobId, { preset: 'namtaru' });
 
     expect(bob.lastState().players[bob.lastState().you].faction).toBe('necropole');
   });
   it('donne aux joueurs le nom de leur compte, et « IA » à l\'ordinateur', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     const view = player.lastState();
     expect(view.players[view.you].name).toBe('Alice');
     expect(view.players[view.you === 0 ? 1 : 0].name).toBe('IA');
   });
 
   it('refuse une connexion inconnue', async () => {
-    await expect(service.startAiGame('inconnu', 'siegfried')).rejects.toThrow(UnknownPlayerError);
+    await expect(service.startAiGame('inconnu', { preset: 'siegfried' })).rejects.toThrow(UnknownPlayerError);
   });
 
   it('envoie la défaite au serveur de comptes quand le joueur abandonne contre l\'IA', async () => {
     const playerId = service.connect(mockChannel().channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     expect(accounts.reportMatch).not.toHaveBeenCalled();
     await service.leave(playerId);
     expect(accounts.reportMatch).toHaveBeenCalledExactlyOnceWith({ gameId: 'id2', mode: 'ai', accountId: 'acc-alice', won: false });
@@ -257,8 +284,8 @@ describe('GameService', () => {
   it('envoie le résultat d\'une partie classée une seule fois, quand elle se termine', async () => {
     const aliceId = service.connect(mockChannel().channel, ALICE);
     const bobId = service.connect(mockChannel().channel, BOB);
-    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: 'siegfried' }, { playerId: bobId, ...BOB, deck: 'kalAzaar' }]);
-    await service.findMatch(bobId, 'kalAzaar');
+    queue.join.mockReturnValueOnce([{ playerId: aliceId, ...ALICE, deck: presetDeckList('siegfried') }, { playerId: bobId, ...BOB, deck: presetDeckList('kalAzaar') }]);
+    await service.findMatch(bobId, { preset: 'kalAzaar' });
 
     await service.disconnect(aliceId);
     await service.disconnect(bobId);
@@ -269,7 +296,7 @@ describe('GameService', () => {
   it('envoie la victoire du joueur qui achève le héros de l\'IA', async () => {
     const player = mockChannel();
     const playerId = service.connect(player.channel, ALICE);
-    await service.startAiGame(playerId, 'siegfried');
+    await startAi(playerId);
     const game = repository.games.values().next().value!;
     const you = player.lastState().you;
     const attacker = place(game, you, 'gouleMiserable', 0, 0);

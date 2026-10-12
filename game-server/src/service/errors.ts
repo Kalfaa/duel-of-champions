@@ -25,3 +25,26 @@ export class UnauthenticatedError extends Error {
     this.name = 'UnauthenticatedError';
   }
 }
+
+export class DeckNotFoundError extends Error {
+  constructor() {
+    super('Ce deck n\'existe pas.');
+    this.name = 'DeckNotFoundError';
+  }
+}
+
+/** Le serveur de comptes a refusé d'enregistrer le deck (nom invalide, trop de decks…). */
+export class DeckRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeckRejectedError';
+  }
+}
+
+/** Les decks ne peuvent pas être lus ou enregistrés pour l'instant. */
+export class DeckStorageUnavailableError extends Error {
+  constructor() {
+    super('Les decks sont indisponibles pour l\'instant : réessayez dans un instant.');
+    this.name = 'DeckStorageUnavailableError';
+  }
+}

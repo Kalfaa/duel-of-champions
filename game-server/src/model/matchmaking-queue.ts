@@ -1,12 +1,12 @@
 import { GameRuleError } from './errors';
-import type { DeckId } from './types';
+import type { DeckList } from './deck-list';
 
 export interface QueueTicket {
   playerId: string;
   /** Compte du joueur : deux connexions d'un même compte ne sont jamais appariées. */
   accountId: string;
   name: string;
-  deck: DeckId;
+  deck: DeckList;
 }
 
 export interface IMatchmakingQueue {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect } from 'react';
-import type { Account } from './api/protocol';
+import { useCallback, useEffect, useState } from 'react';
+import type { Account, SavedDeck } from './api/protocol';
 import { AuthScreen } from './components/AuthScreen';
+import { DeckBuilder } from './components/DeckBuilder';
 import { GameScreen } from './components/GameScreen';
 import { Menu } from './components/Menu';
 import { useAuth } from './hooks/useAuth';
@@ -35,6 +36,8 @@ interface LobbyProps {
 function Lobby({ token, account, onLogout, onRefresh }: LobbyProps) {
   const onUnauthorized = useCallback(() => onLogout('Session expirée : reconnectez-vous.'), [onLogout]);
   const game = useGame(token, onUnauthorized);
+  /** Deck en construction : undefined hors de l'écran de construction, null pour un nouveau deck. */
+  const [editing, setEditing] = useState<SavedDeck | null | undefined>(undefined);
 
   // De retour au menu, le classement et les statistiques tiennent compte de la partie terminée
   useEffect(() => {
@@ -52,8 +55,10 @@ function Lobby({ token, account, onLogout, onRefresh }: LobbyProps) {
   }
 
   if (game.screen === 'game' && game.view) {
-    return <GameScreen view={game.view} ui={game.ui} flashes={game.flashes} attacking={game.attacking} ghosts={game.ghosts} turnBanner={game.turnBanner} drawn={game.drawn} onClick={game.click} onLeave={game.leave} />;
+    return <GameScreen view={game.view} ui={game.ui} flashes={game.flashes} attacking={game.attacking} ghosts={game.ghosts} turnBanner={game.turnBanner} drawn={game.drawn} onClick={game.click} onMulligan={game.mulligan} onLeave={game.leave} />;
   }
 
-  return <Menu account={account} error={game.connectionError} onStart={game.start} onLogout={() => onLogout()} />;
+  if (editing !== undefined) return <DeckBuilder token={token} deck={editing} onClose={() => setEditing(undefined)} />;
+
+  return <Menu token={token} account={account} error={game.connectionError} onStart={game.start} onEditDeck={setEditing} onLogout={() => onLogout()} />;
 }

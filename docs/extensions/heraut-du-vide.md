@@ -23,7 +23,7 @@ Les decks des 5 héros existent (`game-server/src/model/decks.ts`) mais ne sont 
 | Living nightmare | Créature | Nécropole | Rare | ✅ Cauchemar vivant |
 | Void arbiter | Créature | Inferno | Rare | ✅ Arbitre du Néant |
 | Void keeper | Créature | Neutre | Rare | ✅ Gardien du Néant |
-| Unmei-kami | Créature | Sanctuaire | Rare | ❌ Jouer une carte de la main adverse : non fait |
+| Unmei-kami | Créature | Sanctuaire | Rare | ✅ Unmei-kami (la carte prise retourne dans la main adverse si elle n'est pas jouée) |
 | Angel of Mercy | Créature | Havre | Peu commune | ✅ Ange de miséricorde |
 | Blackskull crusher | Créature | Bastion | Peu commune | ✅ Broyeur du Crâne noir |
 | Blackskull shredder | Créature | Bastion | Peu commune | ✅ Déchiqueteur du Crâne noir |

@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { GameScreen } from '../../../src/components/GameScreen';
+import { GameScreen, MulliganBox } from '../../../src/components/GameScreen';
 import { logClass } from '../../../src/components/GameLog';
 import { LogPanel } from '../../../src/components/LogPanel';
 import { EMPTY_UI } from '../../../src/game/selection';
 import { card, gameEvent, mainOptions, playable, player, step, unit, view } from '../fixtures';
 
 const render = (v = view()) =>
-  renderToStaticMarkup(<GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />);
+  renderToStaticMarkup(<GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />);
 
 describe('GameScreen', () => {
   it('affiche la main du joueur et les créatures, sans l\'historique', () => {
@@ -55,7 +55,7 @@ describe('GameScreen', () => {
     const board = [[unit(1), unit(2), null, null], [null, null, null, null]];
     const v = view({ players: [player({ board }), player({ hand: null })] });
     const html = renderToStaticMarkup(
-      <GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={{ uid: 2, riposte: false }} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
+      <GameScreen view={v} ui={EMPTY_UI} flashes={new Map()} attacking={{ uid: 2, riposte: false }} ghosts={[]} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     expect(html.match(/unit p0 attacking/g)).toHaveLength(1);
     expect(render(v)).not.toContain('attacking');
@@ -67,7 +67,7 @@ describe('GameScreen', () => {
     const html = renderToStaticMarkup(
       <GameScreen view={v} ui={EMPTY_UI} flashes={new Map([['unit-5', { id: 1, text: '-2', heal: false }]])}
         attacking={{ uid: 1, riposte: true }} ghosts={[{ unit: unit(5), player: 0, row: 0, lane: 0 }]}
-        onClick={() => {}} onLeave={() => {}} />,
+        onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     expect(html).toContain('unit p1 attacking riposte');
     expect(html).toContain('unit p0 dying');
@@ -79,7 +79,7 @@ describe('GameScreen', () => {
     expect(render(view())).not.toContain('+1 Puissance');
     const menu = renderToStaticMarkup(
       <GameScreen view={view({ options: mainOptions({ power: { usable: false, reason: 'Pas assez de ressources.', steps: [] } }) })}
-        ui={{ selection: { kind: 'heroMenu' }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
+        ui={{ selection: { kind: 'heroMenu' }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     for (const label of ['+1 Puissance', '+1 Magie', '+1 Destinée', '🂠 Piocher']) expect(menu).toContain(label);
     // Panneau latéral sans voile : le champ de bataille reste visible pendant le choix
@@ -90,11 +90,26 @@ describe('GameScreen', () => {
     expect(used).not.toContain('ready');
   });
 
-  it('affiche les cartes restées en jeu de chaque joueur, avec leur couloir', () => {
-    const lasting = [{ index: 0, card: card({ name: 'Ange gardien', type: 'spell', icon: '👼' }), duration: 'nextTurn' as const, lane: 1 }];
+  it('pose les cartes permanentes au-dessus du héros, et les enchantements de couloir au milieu', () => {
+    const lasting = [
+      { index: 0, card: card({ name: 'Ange gardien', type: 'spell', icon: '👼', art: 'Guardian_angel' }), duration: 'nextTurn' as const, lane: 1 },
+      { index: 1, card: card({ name: 'Armure céleste', type: 'spell', icon: '🛡️', art: 'Celestial_armour_card' }), duration: 'permanent' as const, lane: null },
+    ];
     const html = render(view({ players: [player({ lasting }), player({ hand: null })] }));
     expect(html).toContain('class="lasting-card spell"');
-    expect(html).toContain('👼 Ange gardien<small> · couloir 2</small>');
+    expect(html).toContain('Armure céleste (permanent)');
+    expect(html).toContain('class="lane-card spell mine"');
+    expect(html).toContain('Ange gardien (à vous, jusqu&#x27;au prochain tour de son joueur)');
+    expect(html.match(/class="lane enchanted"/g)).toHaveLength(1);
+    expect(html).toContain('class="lasting-slot empty"');
+  });
+
+  it('montre la main adverse face visible quand elle est révélée', () => {
+    const hidden = render(view({ players: [player(), player({ hand: null, handCount: 2 })] }));
+    expect(hidden.match(/class="card-back"/g)).toHaveLength(2);
+    const shown = render(view({ players: [player(), player({ hand: [card({ name: 'Soin', type: 'spell' })], handCount: 1 })] }));
+    expect(shown).toContain('class="card-back revealed spell"');
+    expect(shown).toContain('Main adverse · 1 · révélée');
   });
 
   it('n\'affiche ni le pouvoir ni la capacité permanente des héros sur le champ de bataille', () => {
@@ -151,14 +166,14 @@ describe('GameScreen', () => {
     const modes = step([{ kind: 'mode', index: 0 }, { kind: 'mode', index: 1 }], { prompt: 'Choisissez un effet.', labels: ['Piocher une carte', 'Gagner 4 ressources'] });
     const v = view({ options: mainOptions({ hand: [playable(modes)] }) });
     const html = renderToStaticMarkup(
-      <GameScreen view={v} ui={{ selection: { kind: 'hand', index: 0, choices: [] }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
+      <GameScreen view={v} ui={{ selection: { kind: 'hand', index: 0, choices: [] }, message: '' }} flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     expect(html).toContain('class="chooser"');
     expect(html).toContain('Gagner 4 ressources');
     const library = step([{ kind: 'card', zone: 'library', cardId: 'griffonLoyal' }], { cards: [card({ name: 'Griffon loyal', art: 'Loyal_griffin' })] });
     const withCards = renderToStaticMarkup(
       <GameScreen view={view({ options: mainOptions({ hand: [playable(library)] }) })} ui={{ selection: { kind: 'hand', index: 0, choices: [] }, message: '' }}
-        flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onLeave={() => {}} />,
+        flashes={new Map()} attacking={null} ghosts={[]} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     expect(withCards).toContain('Griffon loyal');
     expect(withCards).toContain('/img/art/Loyal_griffin.webp');
@@ -179,7 +194,7 @@ describe('GameScreen', () => {
 
   it('affiche le bandeau de changement de tour', () => {
     const banner = (player: 0 | 1) => renderToStaticMarkup(
-      <GameScreen view={view()} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} turnBanner={{ id: 1, player }} onClick={() => {}} onLeave={() => {}} />,
+      <GameScreen view={view()} ui={EMPTY_UI} flashes={new Map()} attacking={null} ghosts={[]} turnBanner={{ id: 1, player }} onClick={() => {}} onMulligan={() => {}} onLeave={() => {}} />,
     );
     expect(banner(0)).toContain('class="turn-banner p0"');
     expect(banner(0)).toContain('Votre tour');
@@ -241,5 +256,14 @@ describe('LogPanel', () => {
     const html = renderToStaticMarkup(<LogPanel view={view({ log: [{ text: 'Premier', tone: 'info', player: null }, { text: 'Second', tone: 'turn', player: null }] })} onClose={() => {}} />);
     expect(html).toContain('📜 Historique');
     expect(html.indexOf('Second')).toBeLessThan(html.indexOf('Premier'));
+  });
+});
+
+describe('MulliganBox', () => {
+  it('propose de garder ou changer sa main, puis fait attendre l\'adversaire', () => {
+    const choosing = renderToStaticMarkup(<MulliganBox canMulligan onMulligan={() => {}} />);
+    expect(choosing).toContain('Garder cette main');
+    expect(choosing).toContain('Changer de main');
+    expect(renderToStaticMarkup(<MulliganBox canMulligan={false} onMulligan={() => {}} />)).toContain('En attente du choix');
   });
 });

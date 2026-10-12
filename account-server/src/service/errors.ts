@@ -26,3 +26,10 @@ export class ConflictingMatchError extends Error {
     this.name = 'ConflictingMatchError';
   }
 }
+
+export class DeckNotFoundError extends Error {
+  constructor() {
+    super('Ce deck n\'existe pas.');
+    this.name = 'DeckNotFoundError';
+  }
+}

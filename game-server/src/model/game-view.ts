@@ -1,11 +1,12 @@
 import { getCard, type Card, type LastingRules } from './cards';
-import { DECKS, type Hero } from './decks';
+import { DECKS } from './decks';
+import { getHero, type Hero } from './heroes';
 import { getEvent } from './events';
 import { EXPANSIONS } from './expansions';
 import { FACTIONS } from './factions';
 import type { Game, LogEntry, StepOptions, Unit } from './game';
 import type {
-  AttackType, Choice, ExpansionId, FactionId, Keywords, Phase, PlayerIndex, Rarity, SlotRef, StatKey, Target,
+  AttackType, Choice, DeckId, ExpansionId, FactionId, Keywords, Phase, PlayerIndex, Rarity, SlotRef, StatKey, Target,
 } from './types';
 
 /** Extension d'une carte, telle qu'affichée. */
@@ -203,6 +204,8 @@ export interface PlayerGameView {
   options: TurnOptions | null;
   /** Choix à faire après la résolution d'une carte ; montré au seul joueur qui choisit. */
   pick: PickView | null;
+  /** Avant le premier tour : le joueur peut encore garder ou changer sa main de départ. */
+  canMulligan: boolean;
 }
 
 /** Choix après résolution : options, et cartes révélées dans le même ordre que les options `card`. */
@@ -227,6 +230,35 @@ export function toCardView(card: Card): CardView {
     atk: creature?.atk ?? null, ret: creature?.ret ?? null, hp: creature?.hp ?? null,
     keywords: { ...(creature?.keywords ?? {}) },
   };
+}
+
+/** Deck prédéfini tel que proposé au joueur : son héros et sa faction. */
+export interface DeckSummary {
+  id: DeckId;
+  faction: FactionId;
+  factionLabel: string;
+  factionIcon: string;
+  description: string;
+  hero: HeroView;
+}
+
+export function toDeckSummary(id: DeckId): DeckSummary {
+  const deck = DECKS[id];
+  return { ...toHeroSummary(getHero(deck.hero)), id, description: deck.description };
+}
+
+/** Héros proposé à la construction d'un deck, avec sa faction. */
+export interface HeroSummary {
+  id: string;
+  faction: FactionId;
+  factionLabel: string;
+  factionIcon: string;
+  hero: HeroView;
+}
+
+export function toHeroSummary(hero: Hero): HeroSummary {
+  const faction = FACTIONS[hero.faction];
+  return { id: hero.id, faction: hero.faction, factionLabel: faction.label, factionIcon: faction.icon, hero: toHeroView(hero) };
 }
 
 function toUnitView(game: Game, unit: Unit): UnitView {
@@ -259,7 +291,7 @@ function toPlayerView(game: Game, pi: PlayerIndex, visibleHand: boolean): Player
   });
   return {
     name: p.name, faction: p.faction, factionLabel: faction.label, factionIcon: faction.icon,
-    hero: toHeroView(DECKS[p.deckId].hero),
+    hero: toHeroView(getHero(p.heroId)),
     hp: p.hp, maxHp: p.maxHp, m: game.statOf(pi, 'm'), g: game.statOf(pi, 'g'), d: game.statOf(pi, 'd'), res: p.res, maxRes: p.maxRes,
     deckCount: p.deck.length, handCount: p.hand.length,
     hand: visibleHand ? p.hand.map(id => toCardView(getCard(id))) : null,
@@ -270,7 +302,7 @@ function toPlayerView(game: Game, pi: PlayerIndex, visibleHand: boolean): Player
   };
 }
 
-function toEventView(id: string, used: boolean): EventView {
+export function toEventView(id: string, used: boolean): EventView {
   const e = getEvent(id);
   return {
     id: e.id, name: e.name, rarity: e.rarity, expansion: toExpansionView(e.expansion), icon: e.icon, art: e.art, text: e.text,
@@ -332,7 +364,7 @@ function pendingView(game: Game): PendingView | null {
 /** Ce que voit un joueur : son jeu complet, la main adverse cachée, et ses coups légaux. */
 export function buildPlayerView(game: Game, pi: PlayerIndex): PlayerGameView {
   return {
-    gameId: game.id, you: pi, current: game.current, phase: game.phase, turn: game.turn,
+    gameId: game.id, you: pi, current: game.current, phase: game.phase, turn: game.turn, canMulligan: game.canMulligan(pi),
     winner: game.winner,
     pending: pendingView(game),
     players: [0, 1].map(q => toPlayerView(game, q as PlayerIndex, q === pi || game.player(pi).seesOpponentHand)) as [PlayerView, PlayerView],

@@ -1,6 +1,8 @@
-import { getCreature } from '../../../src/model/cards';
+import { allCards, getCreature } from '../../../src/model/cards';
 import { Game, type PlayerState, type Unit } from '../../../src/model/game';
 import { other, type Choice, type DeckId, type PlayerIndex } from '../../../src/model/types';
+import { cardRefusal, DECK_RULES, presetDeckList, type DeckList } from '../../../src/model/deck-list';
+import { DECKS } from '../../../src/model/decks';
 
 export interface Setup {
   game: Game;
@@ -10,15 +12,18 @@ export interface Setup {
 }
 
 /** Nouvelle partie dont le joueur `a` (celui qui commence) joue le premier deck. */
-export function newGame(decks: [DeckId, DeckId] = ['siegfried', 'kalAzaar'], seed = 42): Setup {
+export function newGame(decks: [DeckId | DeckList, DeckId | DeckList] = ['siegfried', 'kalAzaar'], seed = 42): Setup {
+  const list = (d: DeckId | DeckList) => (typeof d === 'string' ? presetDeckList(d) : d);
   for (let s = seed; ; s++) {
     const game = Game.create({
       id: 'g1', seed: s,
       players: [
-        { id: 'p0', deck: decks[0], isAi: false, accountId: 'acc0', name: 'Joueur 0' },
-        { id: 'p1', deck: decks[1], isAi: false, accountId: 'acc1', name: 'Joueur 1' },
+        { id: 'p0', deck: list(decks[0]), isAi: false, accountId: 'acc0', name: 'Joueur 0' },
+        { id: 'p1', deck: list(decks[1]), isAi: false, accountId: 'acc1', name: 'Joueur 1' },
       ],
     });
+    game.mulligan(0, false);
+    game.mulligan(1, false);
     if (game.current === 0) {
       // Événements sans effet permanent, pour que les coûts des cartes ne dépendent pas du tirage
       setEvents(game, ['celebration', 'dayOfFortune']);
@@ -43,7 +48,7 @@ let nextUid = 1000;
 export function place(game: Game, pi: PlayerIndex, cardId: string, row: number, lane: number): Unit {
   const card = getCreature(cardId);
   const unit: Unit = {
-    uid: nextUid++, cardId, owner: pi, attackType: card.attackType, magic: card.magic, keywords: { ...card.keywords }, deployedTurn: -1,
+    uid: nextUid++, cardId, owner: pi, attackType: card.attackType, magic: card.magic, keywords: { ...card.keywords }, deployedTurn: -1, token: false,
     atk: card.atk, ret: card.ret, hpCur: card.hp, hpMax: card.hp, stack: 1, poison: 0, cripple: 0, boost: 0, enrage: 0, cannotAttackUntil: null, immobileUntil: null, tempAttack: 0, tempKeywords: {}, doomed: null, untargetableUntil: null, moved: false, enchantments: [], acted: false, attacked: false, attacks: 0,
   };
   state(game, pi).board[row]![lane] = unit;
@@ -72,3 +77,19 @@ export function powerNow(game: Game, pi: PlayerIndex, choices: Choice[]): void {
 
 export const unit = (u: Unit): { kind: 'unit'; uid: number } => ({ kind: 'unit', uid: u.uid });
 export const slot = (row: number, lane: number): Choice => ({ kind: 'slot', row, lane });
+
+/** Deck valide du héros : ses cartes autorisées, au maximum d'exemplaires, jusqu'à `size` cartes. */
+export function legalDeck(hero: DeckId, size: number = DECK_RULES.minCards): DeckList {
+  const cards: Record<string, number> = {};
+  let total = 0;
+  for (const card of allCards()) {
+    if (total >= size || cardRefusal(hero, card)) continue;
+    const count = Math.min(card.rarity === 'unique' ? 1 : 4, size - total);
+    cards[card.id] = count;
+    total += count;
+  }
+  return { hero, cards, events: DECKS[hero].events };
+}
+
+/** Deck prédéfini joué avec un autre héros (pour tester le pouvoir d'un héros sans deck prédéfini). */
+export const withHero = (deck: DeckId, hero: string): DeckList => ({ ...presetDeckList(deck), hero });

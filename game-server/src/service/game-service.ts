@@ -1,32 +1,26 @@
 import type { AiStrategy } from '../model/ai-player';
-import { assertPlayableDeck, DECKS, PLAYABLE_DECKS } from '../model/decks';
-import { FACTIONS } from '../model/factions';
+import { presetDeckList, type DeckList } from '../model/deck-list';
+import { assertPlayableDeck, PLAYABLE_DECKS } from '../model/decks';
 import { Game } from '../model/game';
-import { buildPlayerView, toHeroView, type HeroView } from '../model/game-view';
+import { buildPlayerView, toDeckSummary, type DeckSummary } from '../model/game-view';
 import type { IMatchmakingQueue } from '../model/matchmaking-queue';
-import { type DeckId, type FactionId, type GameAction, type PlayerIndex } from '../model/types';
+import type { DeckId, GameAction, PlayerIndex } from '../model/types';
 import type { IAccountClient } from '../integration/account-client';
 import type { IGameRepository } from '../repository/game-repository';
+import type { IDeckService } from './deck-service';
 import { AlreadyInGameError, NotInGameError, UnknownPlayerError } from './errors';
 import type { IDelay, IIdGenerator, IPlayerChannel, ISeedSource, PlayerIdentity } from './ports';
 
-/** Deck jouable, tel que proposé au joueur. */
-export interface DeckSummary {
-  id: DeckId;
-  faction: FactionId;
-  factionLabel: string;
-  factionIcon: string;
-  description: string;
-  hero: HeroView;
-}
+/** Deck choisi pour une partie : un deck prédéfini, ou l'un des decks du joueur. */
+export type DeckChoice = { preset: DeckId } | { custom: string };
 
 export interface IGameService {
   listDecks(): DeckSummary[];
   /** Enregistre la connexion d'un joueur authentifié et retourne son identifiant de connexion. */
   connect(channel: IPlayerChannel, identity: PlayerIdentity): string;
   disconnect(playerId: string): Promise<void>;
-  startAiGame(playerId: string, deck: DeckId): Promise<void>;
-  findMatch(playerId: string, deck: DeckId): Promise<void>;
+  startAiGame(playerId: string, deck: DeckChoice): Promise<void>;
+  findMatch(playerId: string, deck: DeckChoice): Promise<void>;
   act(playerId: string, action: GameAction): Promise<void>;
   /** Quitte la file d'attente ou la partie en cours (abandon si elle n'est pas terminée). */
   leave(playerId: string): Promise<void>;
@@ -66,18 +60,12 @@ export class GameService implements IGameService {
     private readonly ids: IIdGenerator,
     private readonly seeds: ISeedSource,
     private readonly accounts: IAccountClient,
+    private readonly decks: IDeckService,
     private readonly delays: PacingDelays = DEFAULT_DELAYS,
   ) {}
 
   listDecks(): DeckSummary[] {
-    return PLAYABLE_DECKS.map(id => {
-      const deck = DECKS[id];
-      const faction = FACTIONS[deck.faction];
-      return {
-        id, faction: deck.faction, factionLabel: faction.label, factionIcon: faction.icon,
-        description: deck.description, hero: toHeroView(deck.hero),
-      };
-    });
+    return PLAYABLE_DECKS.map(toDeckSummary);
   }
 
   connect(channel: IPlayerChannel, identity: PlayerIdentity): string {
@@ -91,18 +79,18 @@ export class GameService implements IGameService {
     this.connections.delete(playerId);
   }
 
-  async startAiGame(playerId: string, deck: DeckId): Promise<void> {
-    assertPlayableDeck(deck);
+  async startAiGame(playerId: string, choice: DeckChoice): Promise<void> {
     const { accountId, name } = this.identity(playerId);
+    const deck = await this.deckList(accountId, choice);
     await this.ensureAvailable(playerId);
     const game = Game.createAgainstAi({ id: this.ids.next(), seed: this.seeds.next(), player: { id: playerId, deck, accountId, name } });
     await this.publish(game);
     await this.advance(game);
   }
 
-  async findMatch(playerId: string, deck: DeckId): Promise<void> {
-    assertPlayableDeck(deck);
+  async findMatch(playerId: string, choice: DeckChoice): Promise<void> {
     const { accountId, name } = this.identity(playerId);
+    const deck = await this.deckList(accountId, choice);
     await this.ensureAvailable(playerId);
     const pair = this.queue.join({ playerId, accountId, name, deck });
     if (!pair) {
@@ -130,6 +118,12 @@ export class GameService implements IGameService {
     const pi = game?.indexOf(playerId);
     if (!game || pi === null || pi === undefined) return;
     await this.detach(game, pi);
+  }
+
+  private async deckList(accountId: string, choice: DeckChoice): Promise<DeckList> {
+    if ('custom' in choice) return this.decks.playable(accountId, choice.custom);
+    assertPlayableDeck(choice.preset);
+    return presetDeckList(choice.preset);
   }
 
   private identity(playerId: string): PlayerIdentity {
@@ -168,7 +162,7 @@ export class GameService implements IGameService {
   private async advance(game: Game): Promise<void> {
     let aiActions = 0;
     let turnStart = true;
-    while (!game.isOver && game.currentIsAi) {
+    while (game.phase === 'action' && game.currentIsAi) {
       await this.delay.wait(turnStart ? this.delays.turnStart : this.delays.aiAction);
       turnStart = false;
       if (game.isOver) return;

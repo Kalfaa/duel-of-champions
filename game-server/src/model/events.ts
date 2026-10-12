@@ -1,4 +1,4 @@
-import { creatureStep, effect, handStep, unitChoice, type Card, type DamageSource, type Effect } from './cards';
+import { creatureStep, effect, getCard, handStep, unitChoice, type Card, type DamageSource, type Effect } from './cards';
 import type { Game } from './game';
 import { other, type ExpansionId, type PlayerIndex, type Rarity } from './types';
 
@@ -28,6 +28,10 @@ export interface OngoingEvent extends EventBase {
   costModifier?(card: Card): number;
   /** Nombre maximal de cartes que chaque joueur peut jouer par tour. */
   maxCardsPerTurn?: number;
+  /** Les créatures qui arrivent en jeu ne peuvent pas être ciblées jusqu'au prochain tour de leur propriétaire. */
+  protectsArrivals?: boolean;
+  /** Déployer une créature coûtant 4 ou plus coûte 1 ressource de plus, ou 1 dégât au héros. */
+  taxesBigCreatures?: boolean;
 }
 
 export type EventCard = ActiveEvent | OngoingEvent;
@@ -126,9 +130,71 @@ const EVENT_LIST: EventCard[] = [
     text: 'Jusqu\'à votre prochain tour, une créature ciblée ne peut pas être ciblée.',
     effect: effect([creatureStep('Choisissez la créature à protéger.', 'any')], (g, pi, { choices }) => g.shieldUntil(unitChoice(choices[0]), pi)),
   }),
+  // ----------------------- Édition de base (suite) -----------------------
+  active({
+    id: 'weekOfMercenaries', name: 'Semaine des mercenaires', rarity: 'rare', expansion: 'base', icon: '⚔️', art: 'Week_of_the_Mercenaries', cost: 3,
+    text: 'Jusqu\'à la fin du tour, jouez avec la carte du dessus de votre bibliothèque révélée. Tant que c\'est une créature, vos créatures gagnent +1 en attaque ; sinon, les créatures ennemies gagnent +1 en riposte.',
+    effect: effect([], (g, pi) => g.startMercenaryWeek(pi)),
+  }),
+  active({
+    id: 'marketOfWonders', name: 'Marché des merveilles', rarity: 'rare', expansion: 'base', icon: '🎪', art: 'Market_of_Wonders', cost: 5,
+    text: 'Regardez les trois cartes du dessus de votre bibliothèque. Prenez-en une en main et mettez les autres au cimetière.',
+    effect: effect([], (g, pi) => g.pickFromTop(pi, 3, 'grave')),
+  }),
+  active({
+    id: 'weekOfDead', name: 'Semaine des morts', rarity: 'common', expansion: 'base', icon: '💀', art: 'Week_of_the_Dead', cost: 1,
+    text: 'Détruisez une créature alliée ciblée : gagnez autant de ressources que la moitié de son coût (arrondi inférieur).',
+    effect: effect([creatureStep('Choisissez la créature alliée à détruire.', 'ally')], (g, pi, { choices }) => {
+      const unit = g.locate(unitChoice(choices[0]))?.unit;
+      if (!unit) return;
+      const gain = Math.floor(getCard(unit.cardId).cost / 2);
+      g.destroyUnit(unit.uid);
+      if (gain) g.gainResources(pi, gain);
+    }),
+  }),
+  active({
+    id: 'weekOfKnowledge', name: 'Semaine du savoir', rarity: 'common', expansion: 'base', icon: '📖', art: 'Week_of_Knowledge', cost: 0,
+    text: 'Piochez une carte. Vous ne pouvez plus jouer de carte ce tour-ci. Ne peut être utilisé que si vous n\'avez joué aucune carte ce tour-ci.',
+    effect: effect([], (g, pi) => {
+      g.draw(pi, 1);
+      g.lockPlays(pi);
+    }, { requirement: (g, pi) => (g.player(pi).cardsPlayedThisTurn ? 'Vous avez déjà joué une carte ce tour-ci.' : null) }),
+  }),
+  active({
+    id: 'monthOfDancingFlames', name: 'Mois des flammes dansantes', rarity: 'common', expansion: 'base', icon: '💃', art: 'Month_of_the_Dancing_Flames', cost: 5,
+    text: 'Jusqu\'à la fin du tour, toutes les créatures gagnent +1 en attaque et +1 en riposte.',
+    effect: effect([], g => g.boostAllThisTurn(1)),
+  }),
+  // ----------------------- Ascension du vide (suite) -----------------------
+  ongoing({
+    id: 'pathOfAncestors', name: 'Chemin des ancêtres', rarity: 'rare', expansion: 'voidRising', icon: '🛤️', art: 'Path_of_the_Ancestors',
+    text: 'Permanent : les créatures qui arrivent en jeu ne peuvent pas être ciblées jusqu\'au prochain tour de leur propriétaire.',
+    protectsArrivals: true,
+  }),
+  ongoing({
+    id: 'weekOfAusterity', name: 'Semaine d\'austérité', rarity: 'uncommon', expansion: 'voidRising', icon: '🪙', art: 'Week_of_Austerity',
+    text: 'Permanent : déployer une créature coûtant 4 ressources ou plus coûte 1 ressource de plus ; si vous ne pouvez pas la payer, votre héros subit 1 dégât.',
+    taxesBigCreatures: true,
+  }),
+  active({
+    id: 'weekOfTamedSpirits', name: 'Semaine des esprits apprivoisés', rarity: 'uncommon', expansion: 'voidRising', icon: '🦊', art: 'Week_of_the_Tamed_Spirits', cost: 3,
+    text: 'Jusqu\'à votre prochain tour, les créatures magiques gagnent +1 en attaque.',
+    effect: effect([], (g, pi) => g.boostMagicCreatures(pi)),
+  }),
+  active({
+    id: 'weekOfWildSpirits', name: 'Semaine des esprits sauvages', rarity: 'uncommon', expansion: 'voidRising', icon: '🐉', art: 'Week_of_the_Wild_Spirits', cost: 3,
+    text: 'Jusqu\'à la fin du tour, les créatures magiques gagnent +1 en attaque.',
+    effect: effect([], g => g.boostMagicCreatures(null)),
+  }),
 ];
 
 const EVENTS: ReadonlyMap<string, EventCard> = new Map(EVENT_LIST.map(e => [e.id, e]));
+
+/** Tous les événements du jeu, dans l'ordre de la liste. */
+export const allEvents = (): readonly EventCard[] => EVENT_LIST;
+
+/** L'événement, ou undefined si l'identifiant est inconnu. */
+export const findEvent = (id: string): EventCard | undefined => EVENTS.get(id);
 
 export function getEvent(id: string): EventCard {
   const event = EVENTS.get(id);

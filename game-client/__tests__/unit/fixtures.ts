@@ -31,7 +31,7 @@ export const view = (over: Partial<GameView> = {}): GameView => ({
   players: [player(), player({ faction: 'inferno', factionLabel: 'Inferno', hand: null, handCount: 5 })],
   events: [], eventDeckCount: 14,
   log: [{ text: '— Tour de Siegfried —', tone: 'turn', player: null }],
-  options: mainOptions(), pick: null, ...over,
+  options: mainOptions(), pick: null, canMulligan: false, ...over,
 });
 
 export const step = (options: Choice[], over: Partial<StepView> = {}): StepView => ({

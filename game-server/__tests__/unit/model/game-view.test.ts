@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayerView } from '../../../src/model/game-view';
 import { STARTING_HAND } from '../../../src/model/game';
-import { DECKS } from '../../../src/model/decks';
+import { getHero } from '../../../src/model/heroes';
 import { newGame, place, readyToPlay, setEvents, state, unit } from './helpers';
 
 describe('buildPlayerView', () => {
@@ -55,7 +55,7 @@ describe('buildPlayerView', () => {
     const { game, a, b } = newGame();
     const view = buildPlayerView(game, a);
     for (const pi of [a, b]) {
-      expect(view.players[pi].hero.schools).toEqual([...DECKS[state(game, pi).deckId].hero.schools]);
+      expect(view.players[pi].hero.schools).toEqual([...getHero(state(game, pi).heroId).schools]);
     }
   });
 

@@ -6,6 +6,18 @@ import { newGame, place, playNow, powerNow, readyToPlay, slot, state, unit } fro
 const lane = (n: number) => ({ kind: 'lane' as const, lane: n });
 
 describe('Ascension du vide — créatures de Sanctuaire', () => {
+  it('Déjouer est facultatif : sans créature ennemie déplaçable, la Prêtresse du corail se déploie simplement', () => {
+    const { game, a, b } = newGame(['kaiko', 'kalAzaar']);
+    const shielded = place(game, b, 'cerbere', 0, 0);
+    shielded.untargetableUntil = b;
+    readyToPlay(game, a, ['pretresseCorail']);
+    expect(game.whyNotPlay(a, 0)).toBeNull();
+    expect(game.playSteps(a, 0)).toHaveLength(1);
+    playNow(game, a, 0, [slot(1, 0)]);
+    expect(game.player(a).board[1]![0]?.cardId).toBe('pretresseCorail');
+    expect(game.locate(shielded.uid)).toMatchObject({ row: 0, lane: 0 });
+  });
+
   it('Honneur : les créatures alliées adjacentes gagnent +N en attaque et en riposte', () => {
     const { game, a } = newGame();
     place(game, a, 'kenshi', 0, 1); // Honneur 2

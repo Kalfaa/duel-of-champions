@@ -4,10 +4,12 @@ import type { FastifyInstance } from 'fastify';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
 import { GameRuleError } from '../model/errors';
 import type { IAuthService } from '../service/auth-service';
-import { AlreadyInGameError, NotInGameError, UnauthenticatedError } from '../service/errors';
-import type { IGameService } from '../service/game-service';
+import {
+  AlreadyInGameError, DeckNotFoundError, DeckStorageUnavailableError, NotInGameError, UnauthenticatedError,
+} from '../service/errors';
+import type { DeckChoice, IGameService } from '../service/game-service';
 import type { PlayerIdentity } from '../service/ports';
-import { clientMessageSchema, type ServerMessage } from './protocol';
+import { clientMessageSchema, type ClientDeck, type ServerMessage } from './protocol';
 
 export const GAME_SOCKET_PATH = '/ws';
 /** Code de fermeture envoyé quand le jeton d'accès est absent ou invalide : le client doit se reconnecter. */
@@ -16,6 +18,13 @@ export const UNAUTHENTICATED_CLOSE_CODE = 4401;
 export interface MessageSink {
   send(message: ServerMessage): void;
 }
+
+const toDeckChoice = (deck: ClientDeck): DeckChoice => (typeof deck === 'string' ? { preset: deck } : { custom: deck.custom });
+
+/** Erreurs à montrer au joueur telles quelles. */
+const isPlayerFacing = (error: unknown): error is Error =>
+  error instanceof GameRuleError || error instanceof NotInGameError || error instanceof AlreadyInGameError
+  || error instanceof DeckNotFoundError || error instanceof DeckStorageUnavailableError;
 
 /** Valide un message client, appelle le service et renvoie les erreurs au joueur. */
 export async function handleClientMessage(raw: string, playerId: string, service: IGameService, sink: MessageSink): Promise<void> {
@@ -34,13 +43,13 @@ export async function handleClientMessage(raw: string, playerId: string, service
   const message = parsed.data;
   try {
     switch (message.type) {
-      case 'startAi': return await service.startAiGame(playerId, message.deck);
-      case 'findMatch': return await service.findMatch(playerId, message.deck);
+      case 'startAi': return await service.startAiGame(playerId, toDeckChoice(message.deck));
+      case 'findMatch': return await service.findMatch(playerId, toDeckChoice(message.deck));
       case 'action': return await service.act(playerId, message.action);
       case 'leave': return await service.leave(playerId);
     }
   } catch (error) {
-    if (error instanceof GameRuleError || error instanceof NotInGameError || error instanceof AlreadyInGameError) {
+    if (isPlayerFacing(error)) {
       sink.send({ type: 'error', message: error.message });
       return;
     }

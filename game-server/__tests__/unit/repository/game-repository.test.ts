@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../../../src/model/game';
 import { InMemoryGameRepository } from '../../../src/repository/game-repository';
+import { presetDeckList } from '../../../src/model/deck-list';
 
-const makeGame = (id: string, playerId: string) => Game.createAgainstAi({ id, seed: 1, player: { id: playerId, deck: 'siegfried', accountId: `acc-${playerId}`, name: playerId } });
+const makeGame = (id: string, playerId: string) => Game.createAgainstAi({ id, seed: 1, player: { id: playerId, deck: presetDeckList('siegfried'), accountId: `acc-${playerId}`, name: playerId } });
 
 describe('InMemoryGameRepository', () => {
   it('sauvegarde et recharge une partie', async () => {

@@ -95,11 +95,6 @@ button:disabled{opacity:.4;cursor:default}
 .icard .schools{top:62px;right:14px;gap:6px}
 .icard .school{width:44px;height:44px;font-size:24px}
 .herohp{position:absolute;left:-10px;bottom:-10px;width:44px;height:44px;border-radius:50%;border:3px solid #2a0806;box-shadow:0 0 0 2px #d8a09a,0 3px 6px #000;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;color:#fff;text-shadow:0 0 3px #000}
-.lasting{width:160px;display:flex;flex-direction:column;gap:3px}
-.lasting-card{font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid #4a6ab0;background:linear-gradient(#1c2638,#0e131c);color:#cfe0ff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lasting-card.fortune{border-color:#7a5ab8;background:linear-gradient(#2a1c38,#140e1c);color:#e6d4ff}
-.lasting-card small{color:#9fb0d0}
-.lasting-card.target{outline:2px solid #ffd257;box-shadow:0 0 8px #ffd257}
 /* Héros qui peut encore agir ce tour-ci : surligné en vert, un clic dessus ouvre ses actions */
 .herocard.ready:not(.target){border-color:#7fff7f;animation:ready-glow 1s infinite;box-shadow:0 0 18px #5f5}
 @keyframes ready-glow{50%{box-shadow:0 0 5px #5f5}}
@@ -348,8 +343,6 @@ button:disabled{opacity:.4;cursor:default}
   .herocard .schools{top:2px;right:2px}
   .herohp{width:26px;height:26px;left:-5px;bottom:-5px;font-size:13px;border-width:2px}
   /* Le pouvoir reste consultable dans les actions du héros et sur sa carte en grand */
-  .lasting{width:90px}
-  .lasting-card{font-size:9px;padding:2px 4px}
   .piles{gap:4px}
   .pile{width:25px;height:30px;font-size:12px}
   .pile small{display:none}
@@ -522,3 +515,116 @@ button:disabled{opacity:.4;cursor:default}
 .hover-preview .icard-type{font-size:22px}
 .hover-preview .icard-text{font-size:21px}
 @media (hover:none),(max-width:900px){.hover-preview{display:none}}
+
+/* ---------- Construction de deck ---------- */
+.builder{height:100vh;display:flex;flex-direction:column;background:#0a0908}
+.builder-head{display:flex;align-items:center;gap:10px;padding:10px 16px;background:linear-gradient(#3a3228,#17120c);border-bottom:3px solid var(--gold);flex-wrap:wrap}
+.builder-head input,.builder-head select,.builder-filters input{font-family:inherit;font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid #6b5230;background:#1a140c;color:#f5e6c8}
+.builder-name{flex:1;min-width:140px;max-width:320px;font-weight:bold}
+.builder-count{font-weight:bold;color:#9fe39f;white-space:nowrap}
+.builder-count.bad{color:#ff9a9a}
+.builder-status{padding:6px 16px;background:#1d2a14;color:#cfe8b8;font-size:13px}
+.builder-status.error{background:#3a1414;color:#ff9a9a}
+.builder-body{flex:1;display:flex;min-height:0}
+.builder-catalog{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px 16px}
+.builder-filters{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.builder-filters .modes{margin:0}
+.builder-filters input{flex:1;min-width:160px}
+.builder-hint{margin:6px 0;font-size:12px;color:#9c8c70}
+.builder-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:12px;padding:8px 4px 24px;align-content:start;justify-items:center}
+.builder-grid .card{margin-left:0}
+.builder-grid .card:hover{transform:translateY(-4px)}
+.builder-grid .card.in-deck{border-color:var(--gold-l);box-shadow:0 0 10px #f3d58a88}
+.builder-grid .card.maxed{opacity:.6}
+.builder-copies{position:absolute;top:30px;right:4px;background:#000c;border:1px solid var(--gold-l);border-radius:10px;padding:0 6px;font-size:12px;font-weight:bold;color:var(--gold-l)}
+.builder-side{width:340px;flex:none;overflow-y:auto;padding:10px 14px 24px;background:#15100a;border-left:2px solid #4a3a26;text-align:left;font-size:13px}
+.builder-side h3{margin:14px 0 6px;color:var(--gold-l);font-size:15px}
+.builder-preview{display:flex;gap:8px;margin-top:10px;padding:8px;border:1px solid #4a3a26;border-radius:8px;background:#0008;height:130px}
+.builder-list{list-style:none;margin:0;padding:0}
+.builder-list li{display:flex;align-items:center;gap:6px;padding:2px 0;border-bottom:1px solid #2a2014}
+.builder-list .cost{position:static;width:20px;height:20px;font-size:11px;flex:none}
+.builder-list-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.builder-list button{padding:0 7px;font-size:13px}
+.builder-empty{color:#9c8c70;font-style:italic}
+.builder-problems{margin-top:14px;padding:8px 10px;border-radius:6px;background:#3a1414;color:#ffb0b0;line-height:1.4}
+.builder-problems.ok{background:#1d2a14;color:#b8e8a0}
+.my-decks{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.my-deck{width:220px;border:2px solid #6b5230;border-radius:8px;background:#1a120a center 15%/cover no-repeat;overflow:hidden;text-align:left;font-size:12px;box-shadow:0 6px 14px #000}
+.my-deck .ftxt{padding:60px 10px 10px;background:linear-gradient(transparent,#000e 50%)}
+.my-deck h3{margin:0 0 2px;color:var(--gold-l);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.my-deck .my-deck-actions{display:flex;gap:6px;margin-top:6px}
+.my-deck .my-deck-problem{color:#ff9a9a}
+.my-deck.new{display:flex;align-items:center;justify-content:center;min-height:150px;font-size:16px;color:var(--gold-l);cursor:pointer;background:#1a120a}
+.my-deck.new:hover{border-color:var(--gold-l)}
+@media (max-width:900px){
+  .builder-body{flex-direction:column;overflow-y:auto}
+  .builder-catalog{flex:none}
+  .builder-grid{max-height:60vh}
+  .builder-side{width:auto;border-left:none;border-top:2px solid #4a3a26}
+}
+.my-decks-title{margin:24px 0 0;color:var(--gold-l)}
+.faction-tabs{display:flex;flex-wrap:wrap;justify-content:center;margin:16px auto 0;width:fit-content;max-width:100%}
+.faction-tabs .faction-icon{display:inline-block;width:1.3em;height:1.3em;vertical-align:middle}
+.builder-sections{margin:0 0 10px;align-self:flex-start}
+.builder-events-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;padding:8px 4px 24px;align-content:start}
+.builder-event{--ew:100%;width:100%;height:150px}
+.builder-event .ev-text{display:block;color:#cfe3de;font-size:11px;font-weight:normal;margin-top:3px;line-height:1.25}
+.builder-event .ev-name{font-size:13px}
+.builder-event.in-deck{border-color:var(--gold-l);box-shadow:0 0 10px #f3d58a88}
+.builder-event.off{filter:grayscale(.7) brightness(.6);cursor:default}
+.builder-event.off:hover{transform:none}
+.builder-event.maxed{opacity:.75}
+/* Cartes du constructeur : grand format, texte lisible sous l'illustration */
+.builder-grid .card{width:176px;height:290px}
+.builder-grid .card .cart{bottom:128px}
+.builder-grid .card .cbar{height:128px;flex-direction:column;justify-content:flex-start;align-items:stretch;gap:3px;padding:5px 7px;text-align:left}
+.builder-grid .card .cname{font-size:13px;text-align:left}
+.builder-grid .card .itype{font-size:10px}
+.builder-grid .card .ctext{font-size:11px;line-height:1.3;color:#e8dcc0;overflow-y:auto;flex:1;min-height:0}
+.builder-grid .card .ust{bottom:132px}
+.builder-types{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px;color:#e8dcc0}
+/* Héros du deck en grand format, comme une carte */
+.builder-hero{border:3px solid #8a6a3a;border-radius:10px;background:#1f160c;overflow:hidden;box-shadow:0 6px 16px #000}
+.builder-hero-art{position:relative;aspect-ratio:360/440;background:#1a120a center top/cover no-repeat}
+.builder-hero-art .schools{position:absolute;top:8px;right:8px}
+.builder-hero-info{padding:10px 12px;font-size:13px;line-height:1.4;background:linear-gradient(#3a2c1a,#15100a);border-top:2px solid #8a6a3a;display:flex;flex-direction:column;gap:5px}
+.builder-hero-info h2{margin:0;font-size:17px;color:var(--gold-l)}
+.builder-hero-stats{display:flex;gap:10px;flex-wrap:wrap;color:#e8dcc0;font-size:12px}
+.builder-hero-info h2 .faction-icon,.my-deck .faction-icon{display:inline-block;width:1.3em;height:1.3em;vertical-align:middle}
+.mulligan-box{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:40;display:flex;flex-direction:column;align-items:center;gap:10px;max-width:420px;padding:18px 22px;text-align:center;background:#241a0ef2;border:2px solid var(--gold-l);border-radius:10px;box-shadow:0 0 18px #f3d58a44,0 8px 24px #000}
+.mulligan-box b{color:var(--gold-l);font-size:18px}
+.mulligan-box p{margin:0;color:#e8dcc0;font-size:14px;line-height:1.4}
+.mulligan-actions{display:flex;gap:10px}
+.mulligan-actions button{font-size:15px;padding:8px 14px}
+.mulligan-box .spinner{width:32px;height:32px;border-radius:50%;border:4px solid #5a4a30;border-top-color:var(--gold-l);animation:spin 1s linear infinite}
+/* Emplacement des cartes permanentes (sorts et fortunes restés en jeu) */
+.lasting-slot{--cw:56px;width:150px;height:78px;display:flex;align-items:center;justify-content:center;padding:0 4px;border-radius:6px;border:2px solid #4a3a26;background:#0006;box-sizing:border-box}
+.lasting-slot.empty{border-style:dashed;border-color:#5a4a30}
+.lasting-slot-label{font-size:11px;color:#8a7a5a;text-transform:uppercase;letter-spacing:.5px}
+.lasting-card{position:relative;flex:none;width:var(--cw);height:70px;border-radius:5px;border:2px solid #4a6ab0;background:#1c2638 center 20%/cover no-repeat;box-shadow:-3px 0 6px #000a;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:24px;transition:transform .15s}
+.lasting-card+.lasting-card{margin-left:min(4px,calc((138px - var(--cw) * var(--n)) / max(var(--n) - 1, 1)))}
+.lasting-card.fortune{border-color:#7a5ab8;background-color:#2a1c38}
+.lasting-card:hover{transform:translateY(-6px) scale(1.08);z-index:5}
+.lasting-card.target{border-color:#ffd257;box-shadow:0 0 10px #ffd257}
+.lasting-lane,.lasting-timer{position:absolute;bottom:2px;font-size:10px;line-height:1;background:#000c;border-radius:6px;padding:1px 4px;color:#f5e6c8}
+.lasting-lane{left:2px}
+.lasting-timer{right:2px}
+@media (max-width:900px){.lasting-slot{--cw:34px;width:90px;height:52px}.lasting-card{height:46px;font-size:16px}.lasting-card+.lasting-card{margin-left:min(3px,calc((80px - var(--cw) * var(--n)) / max(var(--n) - 1, 1)))}}
+.builder-faction{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;font-size:14px;background:#1a140c}
+.builder-faction.on{background:linear-gradient(#8a6a3a,#4a3418);color:#fff3d0;border-color:var(--gold-l)}
+.builder-faction .faction-icon{display:inline-block;width:1.3em;height:1.3em}
+/* Enchantements de couloir, posés au milieu du champ de bataille */
+.lane.enchanted::before{display:none}
+.lane{gap:2px}
+.lane-card{position:relative;flex:none;width:34px;height:46px;border-radius:4px;border:2px solid #4a6ab0;background:#1c2638 center 20%/cover no-repeat;box-shadow:0 2px 6px #000c;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:2;transition:transform .15s}
+.lane-card.mine{border-color:var(--gold-l)}
+.lane-card.theirs{border-color:#d05050}
+.lane-card:hover{transform:scale(1.6);z-index:10}
+.lane-card.target{box-shadow:0 0 10px #ffd257;outline:2px solid #ffd257}
+.lane-card .lasting-timer{font-size:8px;bottom:1px;right:1px;padding:0 2px}
+/* Main adverse révélée */
+.card-back.revealed{position:relative;border-color:#c9a45a;background-color:#241a0e;background-size:cover;background-position:center 20%;display:flex;align-items:center;justify-content:center;font-size:30px;cursor:help}
+.card-back.revealed.spell{border-color:#4a6ab0}
+.card-back.revealed.fortune{border-color:#7a5ab8}
+.revealed-cost{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#111;border:2px solid #d8dbe0;font-size:12px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center}
+.revealed-name{position:absolute;left:0;right:0;bottom:0;padding:3px 2px;font-size:10px;font-weight:bold;color:#f5e6c8;text-align:center;background:linear-gradient(transparent,#000d 40%);line-height:1.05}

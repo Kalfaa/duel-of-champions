@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { GameRuleError } from '../../../src/model/errors';
 import { MatchmakingQueue, type QueueTicket } from '../../../src/model/matchmaking-queue';
+import { presetDeckList } from '../../../src/model/deck-list';
 import type { DeckId } from '../../../src/model/types';
 
 const ticket = (playerId: string, deck: DeckId = 'siegfried', accountId = `acc-${playerId}`): QueueTicket =>
-  ({ playerId, accountId, name: playerId, deck });
+  ({ playerId, accountId, name: playerId, deck: presetDeckList(deck) });
 
 describe('MatchmakingQueue', () => {
   it('met en attente le premier joueur puis forme une paire avec le suivant', () => {

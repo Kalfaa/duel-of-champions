@@ -4,7 +4,8 @@ import type { Draw } from '../game/draws';
 import type { Click, Highlights, Selection } from '../game/selection';
 import { hoverHandlers, type Hover, type Inspect } from './CardInspector';
 import { CardFace, cls, onRightClick } from './common';
-import { animateDraw, lastCards } from './drawAnimation';
+import { handOrder } from '../game/hand';
+import { animateDraw } from './drawAnimation';
 
 interface Props {
   view: GameView;
@@ -26,18 +27,21 @@ export function Hand({ view, selection, highlights, drawn = null, onClick, onIns
 
   useLayoutEffect(() => {
     if (drawnId === undefined || !handRef.current) return;
-    animateDraw(lastCards(handRef.current, ':scope > .card', drawnCount), document.querySelector<HTMLElement>('.pile.deck[data-mine]'));
+    animateDraw([...handRef.current.querySelectorAll<HTMLElement>(':scope > .card[data-drawn]')], document.querySelector<HTMLElement>('.pile.deck[data-mine]'));
   }, [drawnId, drawnCount]);
 
+  const hand = me.hand ?? [];
   return (
-    <div className="hand" ref={handRef} style={{ '--n': me.hand?.length ?? 0 } as CSSProperties}>
-      {(me.hand ?? []).map((c, i) => {
+    <div className="hand" ref={handRef} style={{ '--n': hand.length } as CSSProperties}>
+      {handOrder(hand, options?.hand).map((i) => {
+        const c = hand[i]!;
         const playable = !!options?.hand[i]?.playable;
         const selected = selection?.kind === 'hand' && selection.index === i;
         return (
           <div
             key={`${i}-${c.id}`}
             className={cls('card', c.type, playable && 'playable', selected && 'sel', highlights.hand.has(i) && 'target')}
+            data-drawn={i >= hand.length - drawnCount || undefined}
             onClick={() => {
               onHover?.(null);
               onClick({ kind: 'hand', index: i });

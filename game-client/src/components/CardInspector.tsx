@@ -157,6 +157,16 @@ export function CardPreview({ view, target }: { view: GameView; target: Inspect 
   );
 }
 
+/** Carte ou événement isolé (construction de deck) affiché en grand ; un clic (gauche ou droit) le referme. */
+export function CardZoom({ item, onClose }: { item: { card: CardView } | { event: EventView }; onClose(): void }) {
+  return (
+    <div className="inspect" onClick={onClose} onContextMenu={onRightClick(onClose)}>
+      {'card' in item ? <CardBody card={item.card} /> : <EventBody event={item.event} leaving={false} />}
+      <div className="inspect-hint">Clic ou Échap pour fermer</div>
+    </div>
+  );
+}
+
 interface Props {
   view: GameView;
   target: Inspect;

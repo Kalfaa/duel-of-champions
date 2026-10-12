@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { Leaderboard, Profile } from '../../../src/components/Menu';
-import type { Account } from '../../../src/api/protocol';
+import { Leaderboard, MyDecks, Profile } from '../../../src/components/Menu';
+import type { Account, SavedDeck } from '../../../src/api/protocol';
 
 const account: Account = {
   id: 'a1', username: 'Halospart1', rating: 1032, createdAt: '2026-10-05T12:00:00.000Z',
@@ -29,5 +29,23 @@ describe('Menu — compte', () => {
 
   it('explique comment apparaître dans un classement vide', () => {
     expect(renderToStaticMarkup(<Leaderboard username="x" entries={[]} />)).toContain('Aucune partie classée');
+  });
+});
+
+describe('Menu — mes decks', () => {
+  const deck = (over: Partial<SavedDeck>): SavedDeck => ({
+    id: 'd1', name: 'Marées', hero: 'kaiko', cards: { kappaShoya: 4 }, events: [], updatedAt: '', problems: [], heroView: null, ...over,
+  });
+
+  it('montre chaque deck, ce qui l\'empêche d\'être joué, et propose d\'en créer un', () => {
+    const html = renderToStaticMarkup(<MyDecks onPlay={() => {}} onEdit={() => {}} decks={[
+      deck({}),
+      deck({ id: 'd2', name: 'Brouillon', problems: ['Le deck doit compter de 50 à 200 cartes (4 actuellement).'] }),
+    ]} />);
+    expect(html).toContain('Marées');
+    expect(html).toContain('4 cartes · 0 événements');
+    expect(html).toContain('Non jouable : Le deck doit compter de 50 à 200 cartes (4 actuellement).');
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    expect(html).toContain('Créer un deck');
   });
 });

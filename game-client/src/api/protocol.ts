@@ -10,7 +10,8 @@ export type StatKey = 'm' | 'g' | 'd';
 export type DevelopChoice = StatKey | 'draw';
 export type AttackType = 'melee' | 'shooter' | 'flyer';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'unique' | 'heroic';
-export type Phase = 'action' | 'over';
+/** Mulligan : avant le premier tour, chaque joueur garde sa main de départ ou la change une fois. */
+export type Phase = 'mulligan' | 'action' | 'over';
 
 export interface Keywords {
   noret?: boolean;
@@ -100,6 +101,27 @@ export interface Keywords {
   replaces?: boolean;
   chains?: number;
   shell?: boolean;
+  income?: number;
+  spellDiscount?: number;
+  healRage?: boolean;
+  breederSpawn?: boolean;
+  ephemeral?: boolean;
+  knightGrowth?: boolean;
+  attackRecoil?: number;
+  doomsday?: boolean;
+  massHeal?: boolean;
+  heroGuard?: boolean;
+  attackFee?: number;
+  laneCap?: number;
+  stoneSkin?: boolean;
+  windShield?: boolean;
+  deathSeal?: boolean;
+  fireShield?: boolean;
+  agony?: number;
+  frozen?: boolean;
+  chill?: number;
+  fragile?: boolean;
+  handRaid?: boolean;
 }
 
 export interface SlotRef {
@@ -134,6 +156,8 @@ export type GameAction =
   | { type: 'move'; uid: number; to: SlotRef }
   /** Choix parmi les cartes révélées après la résolution d'une carte. */
   | { type: 'pick'; choice: Choice }
+  /** Avant le premier tour : garder sa main de départ, ou en piocher une nouvelle. */
+  | { type: 'mulligan'; redraw: boolean }
   | { type: 'endTurn' };
 
 /** Extension (série de cartes) d'une carte. */
@@ -327,6 +351,8 @@ export interface GameView {
   options: TurnOptions | null;
   /** Choix à faire après la résolution d'une carte (montré au seul joueur qui choisit). */
   pick: PickView | null;
+  /** Avant le premier tour : le joueur peut encore garder ou changer sa main de départ. */
+  canMulligan: boolean;
 }
 
 export type GameEvent =
@@ -335,9 +361,12 @@ export type GameEvent =
   | { kind: 'damage' | 'heal'; target: Target; amount: number }
   | { kind: 'buff'; target: Target };
 
+/** Deck choisi pour une partie : un deck prédéfini (désigné par son héros), ou l'un des decks du joueur. */
+export type ClientDeck = DeckId | { custom: string };
+
 export type ClientMessage =
-  | { type: 'startAi'; deck: DeckId }
-  | { type: 'findMatch'; deck: DeckId }
+  | { type: 'startAi'; deck: ClientDeck }
+  | { type: 'findMatch'; deck: ClientDeck }
   | { type: 'action'; action: GameAction }
   | { type: 'leave' };
 
@@ -354,6 +383,52 @@ export interface DeckSummary {
   factionIcon: string;
   description: string;
   hero: HeroView;
+}
+
+/** Règles de construction d'un deck créé par un joueur. */
+export interface DeckRules {
+  minCards: number;
+  maxCards: number;
+  /** Exemplaires d'une même carte ; une carte unique n'en a qu'un. */
+  maxCopies: number;
+  maxUniqueCopies: number;
+  events: number;
+}
+
+/** Héros proposé à la construction d'un deck, avec sa faction. */
+export interface HeroSummary {
+  id: string;
+  faction: FactionId;
+  factionLabel: string;
+  factionIcon: string;
+  hero: HeroView;
+}
+
+/** Tout ce qu'il faut pour construire un deck (GET /api/catalog). */
+export interface Catalog {
+  heroes: HeroSummary[];
+  cards: CardView[];
+  events: EventView[];
+  rules: DeckRules;
+}
+
+/** Deck en cours de construction. */
+export interface DeckDraft {
+  name: string;
+  /** Identifiant du héros. */
+  hero: string;
+  /** Nombre d'exemplaires de chaque carte. */
+  cards: Record<string, number>;
+  events: string[];
+}
+
+/** Deck enregistré du joueur ; `problems` liste ce qui l'empêche d'être joué. */
+export interface SavedDeck extends DeckDraft {
+  id: string;
+  updatedAt: string;
+  problems: string[];
+  /** Le héros du deck (null s'il n'existe plus). */
+  heroView: HeroView | null;
 }
 
 export const other = (pi: PlayerIndex): PlayerIndex => (pi === 0 ? 1 : 0);

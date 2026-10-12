@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameSocket, openBrowserSocket, UNAUTHENTICATED_CLOSE_CODE, type SocketLike } from '../api/game-socket';
-import type { DeckId, GameView } from '../api/protocol';
+import type { ClientDeck, GameView } from '../api/protocol';
 import { countDrawnCards, type Draw } from '../game/draws';
 import { createFlashes, mergeFlashes, removeFlashes, type FlashMap } from '../game/flashes';
 import { findRemovedUnits, type Ghost } from '../game/ghosts';
@@ -40,9 +40,11 @@ export interface GameController {
   /** Cartes qui viennent d'être piochées, le temps de leur animation. */
   drawn: Draw | null;
   connectionError: string | null;
-  start(mode: GameMode, deck: DeckId): void;
+  start(mode: GameMode, deck: ClientDeck): void;
   leave(): void;
   click(click: Click): void;
+  /** Avant le premier tour : garder sa main de départ (false) ou en piocher une nouvelle (true). */
+  mulligan(redraw: boolean): void;
 }
 
 /**
@@ -76,7 +78,7 @@ export function useGame(token: string, onUnauthorized: () => void, openSocket: (
     lastViewRef.current = null;
   }, []);
 
-  const start = useCallback((mode: GameMode, deck: DeckId) => {
+  const start = useCallback((mode: GameMode, deck: ClientDeck) => {
     socketRef.current?.close();
     const socket = new GameSocket(openSocket(token));
     socketRef.current = socket;
@@ -157,7 +159,11 @@ export function useGame(token: string, onUnauthorized: () => void, openSocket: (
     if (result.action) socketRef.current?.send({ type: 'action', action: result.action });
   }, [view, ui]);
 
+  const mulligan = useCallback((redraw: boolean) => {
+    socketRef.current?.send({ type: 'action', action: { type: 'mulligan', redraw } });
+  }, []);
+
   useEffect(() => () => socketRef.current?.close(), []);
 
-  return { screen, view, ui, flashes, attacking, ghosts, turnBanner, drawn, connectionError, start, leave, click };
+  return { screen, view, ui, flashes, attacking, ghosts, turnBanner, drawn, connectionError, start, leave, click, mulligan };
 }

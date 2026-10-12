@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { GameNotification } from '../service/ports';
 
-const deckSchema = z.enum(['siegfried', 'namtaru', 'kalAzaar', 'ishuma', 'kaiko', 'takana', 'yukiko', 'kat', 'alia', 'adarMalik', 'dhamiria', 'noboru', 'zardoc']);
+const presetSchema = z.enum(['siegfried', 'namtaru', 'kalAzaar', 'ishuma', 'kaiko', 'takana', 'yukiko', 'kat', 'alia', 'adarMalik', 'dhamiria', 'noboru', 'zardoc']);
+/** Un deck prédéfini (désigné par son héros), ou l'un des decks du joueur. */
+const deckSchema = z.union([presetSchema, z.object({ custom: z.string().min(1).max(100) })]);
 const playerIndexSchema = z.union([z.literal(0), z.literal(1)]);
 const slotSchema = z.object({ row: z.number().int().min(0).max(1), lane: z.number().int().min(0).max(3) });
 const unitTargetSchema = z.object({ kind: z.literal('unit'), uid: z.number().int() });
@@ -27,6 +29,7 @@ export const gameActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('attack'), uid: z.number().int(), target: targetSchema }),
   z.object({ type: z.literal('move'), uid: z.number().int(), to: slotSchema }),
   z.object({ type: z.literal('pick'), choice: choiceSchema }),
+  z.object({ type: z.literal('mulligan'), redraw: z.boolean() }),
   z.object({ type: z.literal('endTurn') }),
 ]);
 
@@ -38,5 +41,6 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
+export type ClientDeck = z.infer<typeof deckSchema>;
 
 export type ServerMessage = GameNotification | { type: 'error'; message: string };

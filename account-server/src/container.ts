@@ -3,13 +3,16 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { ScryptPasswordHasher, type IPasswordHasher } from './integration/password-hasher';
 import { JwtTokenService } from './integration/token-service';
 import { SqliteAccountRepository } from './repository/account-repository';
+import { SqliteDeckRepository } from './repository/deck-repository';
 import { openDatabase } from './repository/database';
 import { SqliteMatchRepository } from './repository/match-repository';
 import { SqliteTransactionRunner } from './repository/transaction';
 import { registerAccountRoutes } from './route/account-routes';
+import { registerDeckRoutes } from './route/deck-routes';
 import { registerErrorHandler } from './route/errors';
 import { registerMatchRoutes } from './route/match-routes';
 import { AccountService } from './service/account-service';
+import { DeckService } from './service/deck-service';
 import { MatchService } from './service/match-service';
 import type { IClock, IIdGenerator } from './service/ports';
 
@@ -40,11 +43,14 @@ export function buildApp(options: ContainerOptions): FastifyInstance {
     uuidGenerator,
     systemClock,
   );
-  const matchService = new MatchService(accounts, new SqliteMatchRepository(db), new SqliteTransactionRunner(db), systemClock);
+  const transactions = new SqliteTransactionRunner(db);
+  const matchService = new MatchService(accounts, new SqliteMatchRepository(db), transactions, systemClock);
+  const deckService = new DeckService(accounts, new SqliteDeckRepository(db), transactions, uuidGenerator, systemClock);
 
   registerErrorHandler(app);
   registerAccountRoutes(app, accountService);
   registerMatchRoutes(app, matchService, options.internalKey);
+  registerDeckRoutes(app, deckService, options.internalKey);
   app.addHook('onClose', (_instance, done) => {
     db.close();
     done();
